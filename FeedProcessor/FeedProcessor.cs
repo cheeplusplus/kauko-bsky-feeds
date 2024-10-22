@@ -1,14 +1,10 @@
 using System.Globalization;
-using System.IdentityModel.Tokens.Jwt;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
+using KaukoBskyFeeds.Bsky.Models;
 using KaukoBskyFeeds.FeedProcessor.Feeds;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Mvc;
 
 namespace KaukoBskyFeeds.FeedProcessor;
 
@@ -25,9 +21,15 @@ public class FeedProcessor
         _logger = loggerFactory.CreateLogger<FeedProcessor>();
         _config = config;
 
-        _proto = new ATProtocolBuilder().EnableAutoRenewSession(true).Build();
+        var protoLogger = loggerFactory.CreateLogger("AtProto");
+        _proto = new ATProtocolBuilder()
+            .EnableAutoRenewSession(true)
+            .WithLogger(protoLogger)
+            .Build();
+
         _availableFeeds.Add(
-            $"{_config.Identity.PublishedAtUri}/{Constants.FeedType.Generator}/kaukominusartists",
+            // TODO: Figure out how to load this from the config instead of hardcoding it
+            $"{_config.Identity.PublishedAtUri}/{Constants.FeedType.Generator}/minusartlist",
             new TimelineMinusList(
                 loggerFactory.CreateLogger<TimelineMinusList>(),
                 _proto,
@@ -38,7 +40,7 @@ public class FeedProcessor
 
     public async Task<Results<NotFound, UnauthorizedHttpResult, Ok<SkeletonFeed>>> GetFeedSkeleton(
         string feed,
-        int limit = 50,
+        int? limit = null,
         string? cursor = null,
         CancellationToken cancellationToken = default
     )
@@ -74,13 +76,15 @@ public class FeedProcessor
         );
     }
 
-    public async Task Install(CancellationToken cancellationToken = default)
+    public async Task<IResult> Install(CancellationToken cancellationToken = default)
     {
         await EnsureLogin(cancellationToken);
         if (_session == null)
         {
             throw new Exception("Not logged in!");
         }
+
+        _logger.LogInformation("Installing feeds");
 
         foreach (var (feedUri, feedCls) in _availableFeeds)
         {
@@ -90,6 +94,7 @@ public class FeedProcessor
             }
 
             var feedName = feedUri.Split("/").Last();
+
             var record = new CustomFeedRecord(
                 _config.Identity.ServiceDid,
                 feedCls.DisplayName,
@@ -102,15 +107,23 @@ public class FeedProcessor
                 record,
                 feedName
             );
-            await _proto.Repo.PutRecord(
+
+            var recordRefResult = await _proto.Repo.PutRecord(
                 create,
-                JsonTypeInfo.CreateJsonTypeInfo<CreateCustomFeedRecord>(
-                    _proto.Options.JsonSerializerOptions
-                ),
-                JsonTypeInfo.CreateJsonTypeInfo<RecordRef>(_proto.Options.JsonSerializerOptions),
+                SourceGenerationContext.Default.CreateCustomFeedRecord,
+                SourceGenerationContext.Default.CustomRecordRef,
                 cancellationToken: cancellationToken
             );
+
+            var recordRef = recordRefResult.HandleResult();
+            _logger.LogDebug(
+                "Installed {uri}: {status}",
+                recordRef.Uri,
+                recordRef.ValidationStatus
+            );
         }
+
+        return TypedResults.Ok("Done!");
     }
 
     private async Task EnsureLogin(CancellationToken cancellationToken = default)
@@ -133,20 +146,4 @@ public record DescribeFeedGeneratorFeed(string Uri);
 public record DescribeFeedGeneratorResponse(
     string Did,
     IEnumerable<DescribeFeedGeneratorFeed> Feeds
-);
-
-public record CustomFeedRecord(
-    string Did,
-    string DisplayName,
-    string Description,
-    string CreatedAt,
-    BlobRecord? Avatar = null
-);
-
-public record CreateCustomFeedRecord(
-    string Collection,
-    string Repo,
-    CustomFeedRecord Record,
-    string Rkey,
-    bool Validate = true
 );

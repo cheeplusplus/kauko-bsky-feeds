@@ -35,7 +35,7 @@ app.MapGet(
                     {
                         { "id", "#bsky_fg" },
                         { "type", "BskyFeedGenerator" },
-                        { "serviceEndpoint", bskyConfig.Identity.ServiceDid },
+                        { "serviceEndpoint", $"https://{bskyConfig.Identity.Hostname}" },
                     },
                 }
             },
