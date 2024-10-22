@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>KaukoBskyFeeds</RootNamespace>
+    <IsPublishable>true</IsPublishable>
+    <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
+    <ContainerRegistry>ghcr.io</ContainerRegistry>
+    <ContainerRepository>ghcr.io/cheeplusplus/kauko-bsky-feeds/kaukobskyfeed-server</ContainerRepository>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FishyFlip" Version="2.0.0" />
+  </ItemGroup>
+
+</Project>
