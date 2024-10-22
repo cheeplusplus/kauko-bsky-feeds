@@ -22,5 +22,9 @@ public class BskyConfigFeedProcessors
 
 public record BaseFeedConfig(string DisplayName, string Description);
 
-public record TimelineMinusListFeedConfig(string DisplayName, string Description, string ListUri)
-    : BaseFeedConfig(DisplayName, Description);
+public record TimelineMinusListFeedConfig(
+    string DisplayName,
+    string Description,
+    string ListUri,
+    bool ShowSelfPosts = true
+) : BaseFeedConfig(DisplayName, Description);
