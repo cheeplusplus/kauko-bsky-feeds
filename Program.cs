@@ -47,6 +47,8 @@ var feedProcessor = new FeedProcessor(loggerFac, bskyConfig);
 app.MapGet("/xrpc/app.bsky.feed.getFeedSkeleton", feedProcessor.GetFeedSkeleton);
 app.MapGet("/xrpc/app.bsky.feed.describeFeedGenerator", feedProcessor.DescribeFeedGenerator);
 
-app.MapPost("/install", feedProcessor.Install);
+if (bskyConfig.EnableInstall) {
+    app.MapPost("/install", feedProcessor.Install);
+}
 
 app.Run();

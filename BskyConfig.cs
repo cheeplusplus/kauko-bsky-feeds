@@ -3,7 +3,8 @@ namespace KaukoBskyFeeds;
 public record BskyConfigBlock(
     BskyConfigAuth Auth,
     BskyConfigIdentity Identity,
-    BskyConfigFeedProcessors FeedProcessors
+    BskyConfigFeedProcessors FeedProcessors,
+    bool EnableInstall = false
 );
 
 public record BskyConfigAuth(string Username, string Password);
