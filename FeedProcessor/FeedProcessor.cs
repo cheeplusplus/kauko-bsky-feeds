@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.AccessControl;
+using System.Text.Json;
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
@@ -14,9 +16,13 @@ public class FeedProcessor
     private readonly BskyConfigBlock _config;
     private readonly ATProtocol _proto;
     private Session? _session;
-    private readonly Dictionary<string, IFeed> _availableFeeds = [];
+    private readonly Dictionary<string, IFeed> _feeds = [];
 
-    public FeedProcessor(ILoggerFactory loggerFactory, BskyConfigBlock config)
+    public FeedProcessor(
+        ILoggerFactory loggerFactory,
+        IConfiguration configuration,
+        BskyConfigBlock config
+    )
     {
         _logger = loggerFactory.CreateLogger<FeedProcessor>();
         _config = config;
@@ -27,15 +33,29 @@ public class FeedProcessor
             .WithLogger(protoLogger)
             .Build();
 
-        _availableFeeds.Add(
-            // TODO: Figure out how to load this from the config instead of hardcoding it
-            $"{_config.Identity.PublishedAtUri}/{Constants.FeedType.Generator}/minusartlist",
-            new TimelineMinusList(
-                loggerFactory.CreateLogger<TimelineMinusList>(),
-                _proto,
-                config.FeedProcessors.KaukoMinusArtists
-            )
-        );
+        // Build available feeds
+        foreach (var feed in _config.FeedProcessors)
+        {
+            // TODO: Figure out a better way to get a concrete derived type out of the configuration
+            var configSection =
+                configuration.GetSection($"BskyConfig:FeedProcessors:{feed.Key}:Config")
+                ?? throw new Exception("Failed to find feed configuration");
+
+            var inst = feed.Value.Type switch
+            {
+                "TimelineMinusList" => new TimelineMinusList(
+                    loggerFactory.CreateLogger<TimelineMinusList>(),
+                    _proto,
+                    configSection.Get<TimelineMinusListFeedConfig>()
+                        ?? throw new Exception("Failed to parse feed configuration")
+                ),
+                _ => throw new Exception("Unknown feed type"),
+            };
+            _feeds.Add(
+                $"{_config.Identity.PublishedAtUri}/{Constants.FeedType.Generator}/{feed.Key}",
+                inst
+            );
+        }
     }
 
     public async Task<Results<NotFound, UnauthorizedHttpResult, Ok<SkeletonFeed>>> GetFeedSkeleton(
@@ -45,7 +65,7 @@ public class FeedProcessor
         CancellationToken cancellationToken = default
     )
     {
-        if (!_availableFeeds.TryGetValue(feed, out IFeed? feedInstance))
+        if (!_feeds.TryGetValue(feed, out IFeed? feedInstance))
         {
             _logger.LogError("Failed to find feed {feed}", feed);
             return TypedResults.NotFound();
@@ -72,8 +92,38 @@ public class FeedProcessor
     {
         return new DescribeFeedGeneratorResponse(
             _config.Identity.ServiceDid,
-            _availableFeeds.Keys.Select(s => new DescribeFeedGeneratorFeed(s))
+            _feeds.Keys.Select(s => new DescribeFeedGeneratorFeed(s))
         );
+    }
+
+    public async Task<string> GetHydratedFeed(
+        HttpResponse res,
+        string feed,
+        int? limit = null,
+        string? cursor = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!_feeds.TryGetValue(feed, out IFeed? feedInstance))
+        {
+            _logger.LogError("Failed to find feed {feed}", feed);
+            throw new Exception("Failed to find feed");
+        }
+
+        // Attempt login on first fetch
+        await EnsureLogin(cancellationToken);
+        if (_session == null)
+        {
+            throw new Exception("Not logged in!");
+        }
+
+        var feedSkel = await feedInstance.GetFeedSkeleton(limit, cursor, cancellationToken);
+        var feedsInSize = feedSkel.Feed.Take(25).Select(s => new ATUri(s.Post));
+        var hydratedRes = await _proto.Feed.GetPostsAsync(feedsInSize, cancellationToken);
+        var hydrated = hydratedRes.HandleResult();
+
+        res.ContentType = "application/json";
+        return JsonSerializer.Serialize(hydrated, _proto.Options.JsonSerializerOptions);
     }
 
     public async Task<IResult> Install(CancellationToken cancellationToken = default)
@@ -86,7 +136,7 @@ public class FeedProcessor
 
         _logger.LogInformation("Installing feeds");
 
-        foreach (var (feedUri, feedCls) in _availableFeeds)
+        foreach (var (feedUri, feedCls) in _feeds)
         {
             if (cancellationToken.IsCancellationRequested)
             {

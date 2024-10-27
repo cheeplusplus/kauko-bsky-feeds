@@ -3,7 +3,7 @@ namespace KaukoBskyFeeds;
 public record BskyConfigBlock(
     BskyConfigAuth Auth,
     BskyConfigIdentity Identity,
-    BskyConfigFeedProcessors FeedProcessors,
+    Dictionary<string, BskyConfigFeedProcessor> FeedProcessors,
     bool EnableInstall = false
 );
 
@@ -15,10 +15,7 @@ public record BskyConfigIdentity(string Hostname, string PublishedAtUri)
     public string BskyFeedGeneratorServiceEndpoint => $"https://{Hostname}";
 }
 
-public class BskyConfigFeedProcessors
-{
-    public TimelineMinusListFeedConfig KaukoMinusArtists { get; set; } = default!;
-}
+public record BskyConfigFeedProcessor(string Type, BaseFeedConfig Config);
 
 public record BaseFeedConfig(string DisplayName, string Description);
 

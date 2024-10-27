@@ -20,9 +20,12 @@ This requires a file called `bsky.config.json` that looks like this:
         },
         "FeedProcessors": {
             "FEED_NAME": {
-                "DisplayName": "SAMPLE DISPLAY NAME",
-                "Description": "SAMPLE DESCRIPTION",
-                "ListUri": "at://YOUR_BSKY_DID/app.bsky.graph.list/TARGET_LIST_ID"
+                "Type": "TimelineMinusList",
+                "Config": {
+                    "DisplayName": "SAMPLE DISPLAY NAME",
+                    "Description": "SAMPLE DESCRIPTION",
+                    "ListUri": "at://YOUR_BSKY_DID/app.bsky.graph.list/TARGET_LIST_ID"
+                }
             }
         }
     }
