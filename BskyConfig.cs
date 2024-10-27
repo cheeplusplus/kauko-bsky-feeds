@@ -23,5 +23,6 @@ public record TimelineMinusListFeedConfig(
     string DisplayName,
     string Description,
     string ListUri,
+    List<string>? AlwaysShowListUser = null,
     bool ShowSelfPosts = true
 ) : BaseFeedConfig(DisplayName, Description);

@@ -78,9 +78,13 @@ public class TimelineMinusList : IFeed
                     )
                     && _followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
                     && (
-                        // not in the artist list, unless they're a mutual
+                        // not in the artist list, unless they're a mutual or in the always-show list
                         !listMemberDids.Contains(w.Post.Author.Did, new ATDidComparer())
                         || mutualsDids.Contains(w.Post.Author.Did, new ATDidComparer())
+                        || (
+                            _feedConfig.AlwaysShowListUser?.Contains(w.Post.Author.Did.Handler)
+                            ?? false
+                        )
                     )
                 )
             )
