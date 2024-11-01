@@ -4,6 +4,7 @@ using System.Text.Json;
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
+using KaukoBskyFeeds.Bsky;
 using KaukoBskyFeeds.Bsky.Models;
 using KaukoBskyFeeds.FeedProcessor.Feeds;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -13,6 +14,7 @@ namespace KaukoBskyFeeds.FeedProcessor;
 public class FeedProcessor
 {
     private readonly ILogger<FeedProcessor> _logger;
+    private readonly IBskyCache _cache;
     private readonly BskyConfigBlock _config;
     private readonly ATProtocol _proto;
     private Session? _session;
@@ -21,10 +23,12 @@ public class FeedProcessor
     public FeedProcessor(
         ILoggerFactory loggerFactory,
         IConfiguration configuration,
+        IBskyCache cache,
         BskyConfigBlock config
     )
     {
         _logger = loggerFactory.CreateLogger<FeedProcessor>();
+        _cache = cache;
         _config = config;
 
         var protoLogger = loggerFactory.CreateLogger("AtProto");
@@ -47,7 +51,8 @@ public class FeedProcessor
                     loggerFactory.CreateLogger<TimelineMinusList>(),
                     _proto,
                     configSection.Get<TimelineMinusListFeedConfig>()
-                        ?? throw new Exception("Failed to parse feed configuration")
+                        ?? throw new Exception("Failed to parse feed configuration"),
+                    _cache
                 ),
                 _ => throw new Exception("Unknown feed type"),
             };

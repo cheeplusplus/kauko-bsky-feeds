@@ -11,21 +11,19 @@ public class TimelineMinusList : IFeed
     private readonly ILogger<TimelineMinusList> _logger;
     private readonly ATProtocol _proto;
     private readonly TimelineMinusListFeedConfig _feedConfig;
-    private DateTime _lastMutualsUpdate = DateTime.MinValue;
-    private List<ATDid> _followingList = [];
-    private List<ATDid> _followersList = [];
-    private DateTime _lastListMemberUpdate = DateTime.MinValue;
-    private List<ATDid> _listMembers = [];
+    private readonly IBskyCache _cache;
 
     public TimelineMinusList(
         ILogger<TimelineMinusList> logger,
         ATProtocol proto,
-        TimelineMinusListFeedConfig feedConfig
+        TimelineMinusListFeedConfig feedConfig,
+        IBskyCache cache
     )
     {
         _logger = logger;
         _proto = proto;
         _feedConfig = feedConfig;
+        _cache = cache;
         DisplayName = feedConfig.DisplayName;
         Description = feedConfig.Description;
     }
@@ -41,6 +39,11 @@ public class TimelineMinusList : IFeed
     )
     {
         _logger.LogDebug("Fetching timeline");
+        if (_proto.Session == null)
+        {
+            throw new NotLoggedInException();
+        }
+
         var postsRes = await _proto.Feed.GetTimelineAsync(
             limit: 100, // assume we need to fetch more than we're going to show
             cursor: cursor,
@@ -52,8 +55,17 @@ public class TimelineMinusList : IFeed
             return new SkeletonFeed([], posts?.Cursor ?? cursor);
         }
 
-        var mutualsDids = await UpdateMutuals(cancellationToken);
-        var listMemberDids = await UpdateListMembers(cancellationToken);
+        var followingList = await _cache.GetFollowing(
+            _proto,
+            _proto.Session.Did,
+            cancellationToken
+        );
+        var mutualsDids = await GetMutuals(cancellationToken);
+        var listMemberDids = await _cache.GetListMembers(
+            _proto,
+            new ATUri(_feedConfig.ListUri),
+            cancellationToken
+        );
 
         _logger.LogDebug("Processing feed");
         var filteredFeed = posts
@@ -70,13 +82,13 @@ public class TimelineMinusList : IFeed
                         w.Reply == null
                         || (
                             w.Reply?.Parent?.Author?.Did != null
-                            && _followingList.Contains(
+                            && followingList.Contains(
                                 w.Reply.Parent.Author.Did,
                                 new ATDidComparer()
                             )
                         )
                     )
-                    && _followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
+                    && followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
                     && (
                         // not in the artist list, unless they're a mutual or in the always-show list
                         !listMemberDids.Contains(w.Post.Author.Did, new ATDidComparer())
@@ -99,108 +111,24 @@ public class TimelineMinusList : IFeed
         return new SkeletonFeed(filteredFeed.ToArray(), posts.Cursor);
     }
 
-    private async Task<IEnumerable<ATDid>> UpdateMutuals(
-        CancellationToken cancellationToken = default
-    )
+    private async Task<IEnumerable<ATDid>> GetMutuals(CancellationToken cancellationToken = default)
     {
-        var getResult = () => _followingList.Intersect(_followersList, new ATDidComparer());
-
-        if ((DateTime.Now - _lastMutualsUpdate) < TimeSpan.FromMinutes(10))
-        {
-            _logger.LogDebug("Not updating mutuals list, too soon");
-            return getResult();
-        }
-
         if (_proto.Session == null)
         {
-            _logger.LogWarning("Not logged in!");
-            return getResult();
-        }
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return getResult();
+            throw new NotLoggedInException();
         }
 
-        _logger.LogDebug("Fetching follows list");
-        var following = await BskyExtensions.GetAllResults(
-            async (cursor, ct) =>
-            {
-                var r = await _proto.Graph.GetFollowsAsync(
-                    _proto.Session.Handle,
-                    cursor: cursor,
-                    cancellationToken: ct
-                );
-                var d = r.HandleResult();
-                return (d?.Follows, d?.Cursor);
-            },
+        var followingList = await _cache.GetFollowing(
+            _proto,
+            _proto.Session.Did,
             cancellationToken
         );
-        _followingList = following.Select(s => s.Did).ToList();
-
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return getResult();
-        }
-
-        _logger.LogDebug("Fetching followers list");
-        var followers = await BskyExtensions.GetAllResults(
-            async (cursor, ct) =>
-            {
-                var r = await _proto.Graph.GetFollowersAsync(
-                    _proto.Session.Handle,
-                    cursor: cursor,
-                    cancellationToken: ct
-                );
-                var d = r.HandleResult();
-                return (d?.Followers, d?.Cursor);
-            },
-            cancellationToken
-        );
-        _followersList = followers.Select(s => s.Did).ToList();
-
-        _lastMutualsUpdate = DateTime.Now;
-        return getResult();
-    }
-
-    private async Task<IEnumerable<ATDid>> UpdateListMembers(
-        CancellationToken cancellationToken = default
-    )
-    {
-        if ((DateTime.Now - _lastListMemberUpdate) < TimeSpan.FromMinutes(10))
-        {
-            _logger.LogDebug("Not updating list members, too soon");
-            return _listMembers;
-        }
-
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return _listMembers;
-        }
-
-        _logger.LogDebug("Fetching list members list");
-        var listMembers = await BskyExtensions.GetAllResults(
-            async (cursor, ct) =>
-            {
-                var r = await _proto.Graph.GetListAsync(
-                    new ATUri(_feedConfig.ListUri),
-                    cursor: cursor,
-                    cancellationToken: ct
-                );
-                var d = r.HandleResult();
-                return (d?.Items, d?.Cursor);
-            },
+        var followersList = await _cache.GetFollowers(
+            _proto,
+            _proto.Session.Did,
             cancellationToken
         );
 
-        var listMemberDids = listMembers
-            .Select(s => s.Subject.Did)
-            .Where(w => w != null)
-            .Cast<ATDid>()
-            .ToList();
-
-        _listMembers = listMemberDids;
-        _lastListMemberUpdate = DateTime.Now;
-
-        return _listMembers;
+        return followingList.Intersect(followersList, new ATDidComparer());
     }
 }

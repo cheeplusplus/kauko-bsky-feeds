@@ -56,3 +56,9 @@ public class ATDidComparer : IEqualityComparer<ATDid>
         return obj.GetHashCode();
     }
 }
+
+public class NotLoggedInException : Exception
+{
+    public NotLoggedInException()
+        : base("Not logged in!") { }
+}

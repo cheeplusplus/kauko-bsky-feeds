@@ -1,15 +1,19 @@
-using FishyFlip.Models;
 using KaukoBskyFeeds;
+using KaukoBskyFeeds.Bsky;
 using KaukoBskyFeeds.FeedProcessor;
 using Microsoft.AspNetCore.Http.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Configuration.AddJsonFile("bsky.config.json");
 builder.Services.Configure<JsonOptions>(options =>
     options.SerializerOptions.DefaultIgnoreCondition =
         System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault
         | System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
 );
+
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IBskyCache, BskyCache>();
 
 var app = builder.Build();
 
@@ -44,7 +48,8 @@ app.MapGet(
 );
 
 var loggerFac = app.Services.GetRequiredService<ILoggerFactory>();
-var feedProcessor = new FeedProcessor(loggerFac, app.Configuration, bskyConfig);
+var bskyCache = app.Services.GetRequiredService<IBskyCache>();
+var feedProcessor = new FeedProcessor(loggerFac, app.Configuration, bskyCache, bskyConfig); // TODO: Add as service
 app.MapGet("/xrpc/app.bsky.feed.getFeedSkeleton", feedProcessor.GetFeedSkeleton);
 app.MapGet("/xrpc/app.bsky.feed.describeFeedGenerator", feedProcessor.DescribeFeedGenerator);
 
