@@ -1,0 +1,142 @@
+{
+    "type": "object",
+    "properties": {
+        "BskyConfig": {
+            "type": "object",
+            "properties": {
+                "Auth": {
+                    "type": "object",
+                    "properties": {
+                        "Username": {
+                            "type": "string"
+                        },
+                        "Password": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "Username",
+                        "Password"
+                    ]
+                },
+                "Identity": {
+                    "type": "object",
+                    "properties": {
+                        "Hostname": {
+                            "description": "Hostname of this server",
+                            "type": "string",
+                            "format": "hostname"
+                        },
+                        "PublishedAtUri": {
+                            "description": "The URI lists will be published to",
+                            "type": "string",
+                            "$ref": "#/definitions/atUriForDid"
+                        }
+                    },
+                    "required": [
+                        "Hostname",
+                        "PublishedAtUri"
+                    ]
+                },
+                "FeedProcessors": {
+                    "description": "FeedProcessor configurations",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                            "Type": {
+                                "description": "FeedProcessor class name",
+                                "type": "string",
+                                "enum": [
+                                    "TimelineMinusList"
+                                ]
+                            },
+                            "Config": {
+                                "description": "FeedProcessor configuration",
+                                "type": "object",
+                                "properties": {
+                                    "DisplayName": {
+                                        "description": "Published list display name",
+                                        "type": "string"
+                                    },
+                                    "Description": {
+                                        "description": "Published list description",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "DisplayName",
+                                    "Description"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "Type",
+                            "Config"
+                        ],
+                        "oneOf": [
+                            {
+                                "$ref": "#/definitions/FeedProcessorTimelineMinusList"
+                            }
+                        ]
+                    },
+                    "minProperties": 1
+                }
+            },
+            "required": [
+                "Auth",
+                "Identity",
+                "FeedProcessors"
+            ]
+        }
+    },
+    "required": [
+        "BskyConfig"
+    ],
+    "definitions": {
+        "didDocument": {
+            "$comment": "DID document (did:plc:XYZ)",
+            "type": "string",
+            "pattern": "^did:plc:\\w+$"
+        },
+        "atUriForDid": {
+            "$comment": "AT URI for DID document (at://did:plc:XYZ)",
+            "type": "string",
+            "pattern": "^at:\\/\\/did:plc:\\w+$"
+        },
+        "atUriForList": {
+            "$comment": "AT URI for list",
+            "type": "string",
+            "pattern": "^at:\\/\\/did:plc:\\w+\/app\\.bsky\\.graph\\.list\/\\w+$"
+        },
+        "FeedProcessorTimelineMinusList": {
+            "type": "object",
+            "properties": {
+                "Type": {
+                    "type": "string",
+                    "const": "TimelineMinusList"
+                },
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "ListUri": {
+                            "description": "List URI used for filtering",
+                            "$ref": "#/definitions/atUriForList"
+                        },
+                        "AlwaysShowListUser": {
+                            "description": "List users to always show",
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/didDocument"
+                            }
+                        }
+                    },
+                    "required": [
+                        "ListUri",
+                        "AlwaysShowListUser"
+                    ]
+                }
+            }
+        }
+    }
+}

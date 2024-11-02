@@ -1,5 +1,13 @@
 {
     "[csharp]": {
         "editor.defaultFormatter": "csharpier.csharpier-vscode"
-    }
+    },
+    "json.schemas": [
+        {
+            "fileMatch": [
+                "bsky.config.json"
+            ],
+            "url": "/bsky.config.schema.json"
+        }
+    ]
 }
