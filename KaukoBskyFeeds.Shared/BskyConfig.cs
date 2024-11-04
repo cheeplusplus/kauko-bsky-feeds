@@ -1,4 +1,4 @@
-namespace KaukoBskyFeeds;
+namespace KaukoBskyFeeds.Shared;
 
 public record BskyConfigBlock(
     BskyConfigAuth Auth,

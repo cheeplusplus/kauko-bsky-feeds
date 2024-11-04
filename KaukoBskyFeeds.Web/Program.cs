@@ -1,6 +1,6 @@
-using KaukoBskyFeeds;
-using KaukoBskyFeeds.Bsky;
-using KaukoBskyFeeds.FeedProcessor;
+using KaukoBskyFeeds.Shared;
+using KaukoBskyFeeds.Shared.Bsky;
+using KaukoBskyFeeds.Web;
 using Microsoft.AspNetCore.Http.Json;
 
 var builder = WebApplication.CreateBuilder(args);

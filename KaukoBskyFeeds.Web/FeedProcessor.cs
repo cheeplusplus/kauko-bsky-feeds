@@ -1,15 +1,15 @@
 using System.Globalization;
-using System.Security.AccessControl;
 using System.Text.Json;
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
-using KaukoBskyFeeds.Bsky;
-using KaukoBskyFeeds.Bsky.Models;
-using KaukoBskyFeeds.FeedProcessor.Feeds;
+using KaukoBskyFeeds.Feeds;
+using KaukoBskyFeeds.Shared;
+using KaukoBskyFeeds.Shared.Bsky;
+using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
-namespace KaukoBskyFeeds.FeedProcessor;
+namespace KaukoBskyFeeds.Web;
 
 public class FeedProcessor
 {
@@ -165,8 +165,8 @@ public class FeedProcessor
 
             var recordRefResult = await _proto.Repo.PutRecord(
                 create,
-                SourceGenerationContext.Default.CreateCustomFeedRecord,
-                SourceGenerationContext.Default.CustomRecordRef,
+                BskySourceGenerationContext.Default.CreateCustomFeedRecord,
+                BskySourceGenerationContext.Default.CustomRecordRef,
                 cancellationToken: cancellationToken
             );
 

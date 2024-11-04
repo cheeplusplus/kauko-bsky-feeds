@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using FishyFlip.Models;
 
-namespace KaukoBskyFeeds.Bsky.Models;
+namespace KaukoBskyFeeds.Shared.Bsky.Models;
 
 public record CustomFeedRecord(
     string Did,
@@ -30,4 +30,4 @@ public record CustomRecordRef(string Uri, string Cid, string ValidationStatus);
     PropertyNameCaseInsensitive = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault
 )]
-internal partial class SourceGenerationContext : JsonSerializerContext { }
+public partial class BskySourceGenerationContext : JsonSerializerContext { }

@@ -1,6 +1,6 @@
 using FishyFlip.Models;
 
-namespace KaukoBskyFeeds.FeedProcessor.Feeds;
+namespace KaukoBskyFeeds.Feeds;
 
 public interface IFeed
 {

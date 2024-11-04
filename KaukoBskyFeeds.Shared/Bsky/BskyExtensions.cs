@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using FishyFlip.Models;
 
-namespace KaukoBskyFeeds.Bsky;
+namespace KaukoBskyFeeds.Shared.Bsky;
 
 public delegate Task<(T[]?, string?)> BskyPageableList<T>(
     string? cursor,

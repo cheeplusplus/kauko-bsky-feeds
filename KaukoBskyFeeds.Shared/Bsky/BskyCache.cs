@@ -2,8 +2,9 @@ using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
-namespace KaukoBskyFeeds.Bsky;
+namespace KaukoBskyFeeds.Shared.Bsky;
 
 public interface IBskyCache
 {

@@ -2,9 +2,11 @@ using System.Data;
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
-using KaukoBskyFeeds.Bsky;
+using KaukoBskyFeeds.Shared;
+using KaukoBskyFeeds.Shared.Bsky;
+using Microsoft.Extensions.Logging;
 
-namespace KaukoBskyFeeds.FeedProcessor.Feeds;
+namespace KaukoBskyFeeds.Feeds;
 
 public class TimelineMinusList : IFeed
 {

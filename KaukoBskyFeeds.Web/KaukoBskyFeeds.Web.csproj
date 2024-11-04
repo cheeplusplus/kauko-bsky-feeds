@@ -4,7 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>KaukoBskyFeeds</RootNamespace>
+    <RootNamespace>KaukoBskyFeeds.Web</RootNamespace>
     <IsPublishable>true</IsPublishable>
     <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
     <ContainerRegistry>ghcr.io</ContainerRegistry>
@@ -17,6 +17,11 @@
 
   <ItemGroup>
     <Content Remove="bsky.config.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Feeds\KaukoBskyFeeds.Feeds.csproj" />
   </ItemGroup>
 
 </Project>

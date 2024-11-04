@@ -7,7 +7,7 @@
             "fileMatch": [
                 "bsky.config.json"
             ],
-            "url": "/bsky.config.schema.json"
+            "url": "./bsky.config.schema.json"
         }
     ]
 }
