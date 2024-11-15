@@ -93,7 +93,14 @@ public class TimelineMinusList : IFeed
                             && followingList.Contains(w.Reply.Root.Author.Did, new ATDidComparer())
                         )
                     )
-                    && followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
+                    && (
+                        // not a quote post, or a quote post to someone we're following
+                        w.Post.Record?.Embed == null
+                        || (
+                            w.Post.Record.Embed is RecordViewEmbed re
+                            && followingList.Contains(re.Record.Author.Did, new ATDidComparer())
+                        )
+                    )
                     && (
                         // not in the artist list, unless they're a mutual or in the always-show list
                         !listMemberDids.Contains(w.Post.Author.Did, new ATDidComparer())
