@@ -5,7 +5,24 @@ using Microsoft.AspNetCore.Http.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Configuration.AddJsonFile("bsky.config.json");
+// Bleh: we may need to step up a directory to find the config file
+var bskyConfigFilename = "bsky.config.json";
+var bskyConfigPath = Path.Join(Directory.GetCurrentDirectory(), bskyConfigFilename);
+if (!File.Exists(bskyConfigPath))
+{
+    // Move up
+    var upOne = Path.Join(Directory.GetCurrentDirectory(), "..", bskyConfigFilename);
+    if (File.Exists(upOne))
+    {
+        bskyConfigPath = upOne;
+    }
+    else
+    {
+        throw new Exception("Couldn't find bsky.config.json");
+    }
+}
+
+builder.Configuration.AddJsonFile(bskyConfigPath);
 builder.Services.Configure<JsonOptions>(options =>
     options.SerializerOptions.DefaultIgnoreCondition =
         System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault

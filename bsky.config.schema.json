@@ -137,6 +137,11 @@
                                 "$ref": "#/definitions/didDocument"
                             }
                         },
+                        "RestrictToFeedOwner": {
+                            "description": "Restrict to the feed owner?",
+                            "type": "boolean",
+                            "default": true
+                        },
                         "ShowSelfPosts": {
                             "description": "Show self posts?",
                             "type": "boolean",
@@ -152,12 +157,12 @@
                             "type": [
                                 "string"
                             ],
-                            "default": "all",
+                            "default": "All",
                             "enum": [
-                                "all",
-                                "none",
-                                "following-only",
-                                "following-only-tail"
+                                "All",
+                                "None",
+                                "FollowingOnly",
+                                "FollowingOnlyTail"
                             ]
                         },
                         "ShowQuotePosts": {
@@ -165,11 +170,11 @@
                             "type": [
                                 "string"
                             ],
-                            "default": "all",
+                            "default": "All",
                             "enum": [
-                                "all",
-                                "none",
-                                "following-only"
+                                "All",
+                                "None",
+                                "FollowingOnly"
                             ]
                         },
                         "IncludeListMutuals": {
