@@ -4,6 +4,7 @@ using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Feeds;
+using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
@@ -23,13 +24,15 @@ public class FeedProcessor
     public FeedProcessor(
         ILoggerFactory loggerFactory,
         IConfiguration configuration,
-        IBskyCache cache,
-        BskyConfigBlock config
+        IBskyCache cache
     )
     {
         _logger = loggerFactory.CreateLogger<FeedProcessor>();
         _cache = cache;
-        _config = config;
+
+        _config =
+            configuration.GetSection("BskyConfig").Get<BskyConfigBlock>()
+            ?? throw new Exception("Failed to load bsky config");
 
         var protoLogger = loggerFactory.CreateLogger("AtProto");
         _proto = new ATProtocolBuilder()
@@ -45,7 +48,7 @@ public class FeedProcessor
                 configuration.GetSection($"BskyConfig:FeedProcessors:{feed.Key}:Config")
                 ?? throw new Exception("Failed to find feed configuration");
 
-            var inst = feed.Value.Type switch
+            IFeed inst = feed.Value.Type switch
             {
                 "TimelineMinusList" => new TimelineMinusList(
                     loggerFactory.CreateLogger<TimelineMinusList>(),

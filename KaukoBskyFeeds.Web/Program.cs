@@ -14,6 +14,7 @@ builder.Services.Configure<JsonOptions>(options =>
 
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IBskyCache, BskyCache>();
+builder.Services.AddSingleton<FeedProcessor>();
 
 var app = builder.Build();
 
@@ -36,7 +37,7 @@ app.MapGet(
                 "service",
                 new List<Dictionary<string, string>>
                 {
-                    new Dictionary<string, string>
+                    new()
                     {
                         { "id", "#bsky_fg" },
                         { "type", "BskyFeedGenerator" },
@@ -47,9 +48,7 @@ app.MapGet(
         }
 );
 
-var loggerFac = app.Services.GetRequiredService<ILoggerFactory>();
-var bskyCache = app.Services.GetRequiredService<IBskyCache>();
-var feedProcessor = new FeedProcessor(loggerFac, app.Configuration, bskyCache, bskyConfig); // TODO: Add as service
+var feedProcessor = app.Services.GetRequiredService<FeedProcessor>();
 app.MapGet("/xrpc/app.bsky.feed.getFeedSkeleton", feedProcessor.GetFeedSkeleton);
 app.MapGet("/xrpc/app.bsky.feed.describeFeedGenerator", feedProcessor.DescribeFeedGenerator);
 
