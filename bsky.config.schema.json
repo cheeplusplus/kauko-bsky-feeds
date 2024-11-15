@@ -136,6 +136,46 @@
                             "items": {
                                 "$ref": "#/definitions/didDocument"
                             }
+                        },
+                        "ShowSelfPosts": {
+                            "description": "Show self posts?",
+                            "type": "boolean",
+                            "default": true
+                        },
+                        "ShowReposts": {
+                            "description": "Show reposts?",
+                            "type": "boolean",
+                            "default": true
+                        },
+                        "ShowReplies": {
+                            "description": "Show replies?",
+                            "type": [
+                                "string"
+                            ],
+                            "default": "all",
+                            "enum": [
+                                "all",
+                                "none",
+                                "following-only",
+                                "following-only-tail"
+                            ]
+                        },
+                        "ShowQuotePosts": {
+                            "description": "Show quote posts?",
+                            "type": [
+                                "string"
+                            ],
+                            "default": "all",
+                            "enum": [
+                                "all",
+                                "none",
+                                "following-only"
+                            ]
+                        },
+                        "IncludeListMutuals": {
+                            "description": "Include posts from list from mutuals?",
+                            "type": "boolean",
+                            "default": false
                         }
                     },
                     "required": [

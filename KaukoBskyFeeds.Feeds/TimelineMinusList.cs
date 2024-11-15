@@ -69,7 +69,12 @@ public class TimelineMinusList : IFeed
             cancellationToken
         );
 
-        bool isMuted(ATDid did) => _feedConfig.MuteUsers?.Contains(did.Handler) ?? false;
+        var didComparer = new ATDidComparer();
+        bool isFollowing(ATDid? did) => did != null && followingList.Contains(did, didComparer);
+        bool isMutual(ATDid? did) => did != null && mutualsDids.Contains(did, didComparer);
+        bool isInList(ATDid? did) => did != null && listMemberDids.Contains(did, didComparer);
+        bool isMuted(ATDid? did) =>
+            did != null && (_feedConfig.MuteUsers?.Contains(did.Handler) ?? false);
 
         _logger.LogDebug("Processing feed");
         var filteredFeed = posts
@@ -80,40 +85,53 @@ public class TimelineMinusList : IFeed
                     && w.Post.Author.Did.Handler == _proto.Session?.Did?.Handler
                 )
                 || (
-                    followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
-                    && !isMuted(w.Post.Author.Did) // drop muted users
-                    && w.Reason == null // not a repost
+                    // followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
+                    !isMuted(w.Post.Author.Did) // drop muted users
+                    && (
+                        // not a repost
+                        _feedConfig.ShowReposts || (!_feedConfig.ShowReposts && w.Reason == null)
+                    )
                     && (
                         // not a reply, or a reply to someone we're following
                         w.Reply == null
+                        || _feedConfig.ShowReplies == ShowRepliesSetting.All
                         || (
-                            w.Reply?.Parent?.Author?.Did != null
-                            && w.Reply?.Root?.Author?.Did != null
-                            && followingList.Contains(
-                                w.Reply.Parent.Author.Did,
-                                new ATDidComparer()
-                            )
-                            && followingList.Contains(w.Reply.Root.Author.Did, new ATDidComparer())
-                            && !isMuted(w.Reply.Parent.Author.Did)
-                            && !isMuted(w.Reply.Root.Author.Did)
+                            _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
+                            && isFollowing(w.Reply.Parent?.Author.Did)
+                            && !isMuted(w.Reply.Parent?.Author.Did)
+                        )
+                        || (
+                            _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly
+                            && isFollowing(w.Reply?.Parent?.Author.Did)
+                            && isFollowing(w.Reply?.Root?.Author.Did)
+                            && !isMuted(w.Reply?.Parent?.Author.Did)
+                            && !isMuted(w.Reply?.Root?.Author.Did)
                         )
                     )
                     && (
                         // not a quote post, or a quote post to someone we're following
-                        w.Post.Record?.Embed == null
+                        _feedConfig.ShowQuotePosts == ShowQuotePostsSetting.All
                         || (
-                            w.Post.Record.Embed is RecordViewEmbed re
-                            && followingList.Contains(re.Record.Author.Did, new ATDidComparer())
-                            && !isMuted(re.Record.Author.Did)
+                            _feedConfig.ShowQuotePosts == ShowQuotePostsSetting.FollowingOnly
+                            && (
+                                w.Post.Record?.Embed == null
+                                || (
+                                    w.Post.Record.Embed is RecordViewEmbed re
+                                    && isFollowing(re.Record.Author.Did)
+                                    && !isMuted(re.Record.Author.Did)
+                                )
+                            )
                         )
                     )
                     && (
                         // not in the artist list, unless they're a mutual or in the always-show list
-                        !listMemberDids.Contains(w.Post.Author.Did, new ATDidComparer())
-                        || mutualsDids.Contains(w.Post.Author.Did, new ATDidComparer())
+                        !isInList(w.Post.Author.Did)
                         || (
-                            _feedConfig.AlwaysShowListUser?.Contains(w.Post.Author.Did.Handler)
-                            ?? false
+                            (_feedConfig.IncludeListMutuals && isMutual(w.Post.Author.Did))
+                            || (
+                                _feedConfig.AlwaysShowListUser?.Contains(w.Post.Author.Did.Handler)
+                                ?? false
+                            )
                         )
                     )
                 )
