@@ -129,6 +129,13 @@
                             "items": {
                                 "$ref": "#/definitions/didDocument"
                             }
+                        },
+                        "MuteUsers": {
+                            "description": "Users to mute",
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/didDocument"
+                            }
                         }
                     },
                     "required": [

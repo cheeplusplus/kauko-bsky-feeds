@@ -69,6 +69,8 @@ public class TimelineMinusList : IFeed
             cancellationToken
         );
 
+        bool isMuted(ATDid did) => _feedConfig.MuteUsers?.Contains(did.Handler) ?? false;
+
         _logger.LogDebug("Processing feed");
         var filteredFeed = posts
             .Feed.Where(w =>
@@ -79,6 +81,7 @@ public class TimelineMinusList : IFeed
                 )
                 || (
                     followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
+                    && !isMuted(w.Post.Author.Did) // drop muted users
                     && w.Reason == null // not a repost
                     && (
                         // not a reply, or a reply to someone we're following
@@ -91,6 +94,8 @@ public class TimelineMinusList : IFeed
                                 new ATDidComparer()
                             )
                             && followingList.Contains(w.Reply.Root.Author.Did, new ATDidComparer())
+                            && !isMuted(w.Reply.Parent.Author.Did)
+                            && !isMuted(w.Reply.Root.Author.Did)
                         )
                     )
                     && (
@@ -99,6 +104,7 @@ public class TimelineMinusList : IFeed
                         || (
                             w.Post.Record.Embed is RecordViewEmbed re
                             && followingList.Contains(re.Record.Author.Did, new ATDidComparer())
+                            && !isMuted(re.Record.Author.Did)
                         )
                     )
                     && (
