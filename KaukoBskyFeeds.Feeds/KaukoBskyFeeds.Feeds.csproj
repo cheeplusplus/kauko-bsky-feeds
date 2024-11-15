@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Db\KaukoBskyFeeds.Db.csproj" />
   </ItemGroup>
 
 </Project>

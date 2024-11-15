@@ -42,6 +42,12 @@ public static class BskyExtensions
 
         return results;
     }
+
+    public static IEnumerable<T> WhereNotNull<T>(this IEnumerable<T?> list)
+        where T : class
+    {
+        return list.Where(w => w != null).Cast<T>();
+    }
 }
 
 public class ATDidComparer : IEqualityComparer<ATDid>

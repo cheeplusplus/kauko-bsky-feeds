@@ -46,10 +46,7 @@
                         "properties": {
                             "Type": {
                                 "description": "FeedProcessor class name",
-                                "type": "string",
-                                "enum": [
-                                    "TimelineMinusList"
-                                ]
+                                "type": "string"
                             },
                             "Config": {
                                 "description": "FeedProcessor configuration",
@@ -77,6 +74,9 @@
                         "oneOf": [
                             {
                                 "$ref": "#/definitions/FeedProcessorTimelineMinusList"
+                            },
+                            {
+                                "$ref": "#/definitions/FeedProcessorTimelineArtOnly"
                             }
                         ]
                     },
@@ -187,6 +187,27 @@
                     "required": [
                         "ListUri",
                         "AlwaysShowListUser"
+                    ]
+                }
+            }
+        },
+        "FeedProcessorTimelineArtOnly": {
+            "type": "object",
+            "properties": {
+                "Type": {
+                    "type": "string",
+                    "const": "TimelineArtOnly"
+                },
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "ListUri": {
+                            "description": "List URI used for filtering",
+                            "$ref": "#/definitions/atUriForList"
+                        }
+                    },
+                    "required": [
+                        "ListUri"
                     ]
                 }
             }

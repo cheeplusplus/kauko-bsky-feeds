@@ -7,4 +7,15 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\KaukoBskyFeeds.Ingest.Jetstream\KaukoBskyFeeds.Ingest.Jetstream.csproj" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Db\KaukoBskyFeeds.Db.csproj" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FishyFlip" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+  </ItemGroup>
+
 </Project>
