@@ -10,6 +10,7 @@ public record TimelineMinusListFeedConfig(
     string ListUri,
     List<string>? AlwaysShowListUser = null,
     List<string>? MuteUsers = null,
+    bool RestrictToFeedOwner = true,
     bool ShowSelfPosts = true,
     bool ShowReposts = true,
     [property: JsonConverter(typeof(JsonStringEnumConverter<ShowRepliesSetting>))]
@@ -21,27 +22,15 @@ public record TimelineMinusListFeedConfig(
 
 public enum ShowRepliesSetting
 {
-    [EnumMember(Value = "all")]
     All,
-
-    [EnumMember(Value = "none")]
     None,
-
-    [EnumMember(Value = "following-only")]
     FollowingOnly,
-
-    [EnumMember(Value = "following-only-tail")]
     FollowingOnlyTail,
 }
 
 public enum ShowQuotePostsSetting
 {
-    [EnumMember(Value = "all")]
     All,
-
-    [EnumMember(Value = "none")]
     None,
-
-    [EnumMember(Value = "following-only")]
     FollowingOnly,
 }

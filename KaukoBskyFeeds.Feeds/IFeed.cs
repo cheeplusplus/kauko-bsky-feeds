@@ -8,6 +8,7 @@ public interface IFeed
     public string Description { get; }
 
     Task<SkeletonFeed> GetFeedSkeleton(
+        ATDid? requestor,
         int? limit,
         string? cursor,
         CancellationToken cancellationToken = default

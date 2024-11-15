@@ -62,3 +62,5 @@ public class NotLoggedInException : Exception
     public NotLoggedInException()
         : base("Not logged in!") { }
 }
+
+public class FeedProhibitedException : Exception { }

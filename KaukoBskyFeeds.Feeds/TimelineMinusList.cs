@@ -3,7 +3,6 @@ using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Feeds.Config;
-using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.Extensions.Logging;
 
@@ -36,6 +35,7 @@ public class TimelineMinusList : IFeed
     public string Description { get; init; }
 
     public async Task<SkeletonFeed> GetFeedSkeleton(
+        ATDid? requestor,
         int? limit,
         string? cursor,
         CancellationToken cancellationToken = default
@@ -45,6 +45,13 @@ public class TimelineMinusList : IFeed
         if (_proto.Session == null)
         {
             throw new NotLoggedInException();
+        }
+
+        var didComparer = new ATDidComparer();
+
+        if (_feedConfig.RestrictToFeedOwner && !didComparer.Equals(requestor, _proto.Session.Did))
+        {
+            throw new FeedProhibitedException();
         }
 
         var postsRes = await _proto.Feed.GetTimelineAsync(
@@ -70,7 +77,6 @@ public class TimelineMinusList : IFeed
             cancellationToken
         );
 
-        var didComparer = new ATDidComparer();
         bool isFollowing(ATDid? did) => did != null && followingList.Contains(did, didComparer);
         bool isMutual(ATDid? did) => did != null && mutualsDids.Contains(did, didComparer);
         bool isInList(ATDid? did) => did != null && listMemberDids.Contains(did, didComparer);
