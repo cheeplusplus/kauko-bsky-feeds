@@ -78,7 +78,8 @@ public class TimelineMinusList : IFeed
                     && w.Post.Author.Did.Handler == _proto.Session?.Did?.Handler
                 )
                 || (
-                    w.Reason == null // not a repost
+                    followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
+                    && w.Reason == null // not a repost
                     && (
                         // not a reply, or a reply to someone we're following
                         w.Reply == null
