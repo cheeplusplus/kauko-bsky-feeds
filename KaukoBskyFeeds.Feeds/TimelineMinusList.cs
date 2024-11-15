@@ -84,10 +84,12 @@ public class TimelineMinusList : IFeed
                         w.Reply == null
                         || (
                             w.Reply?.Parent?.Author?.Did != null
+                            && w.Reply?.Root?.Author?.Did != null
                             && followingList.Contains(
                                 w.Reply.Parent.Author.Did,
                                 new ATDidComparer()
                             )
+                            && followingList.Contains(w.Reply.Root.Author.Did, new ATDidComparer())
                         )
                     )
                     && followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
