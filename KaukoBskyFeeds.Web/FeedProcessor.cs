@@ -81,9 +81,9 @@ public class FeedProcessor
             return TypedResults.NotFound();
         }
 
-        _logger.LogInformation("Got auth header: {authorization}", authorization);
         var requestingDid = BskyAuth.GetDidFromAuthHeader(
             authorization,
+            "app.bsky.feed.getFeedSkeleton",
             _config.Identity.ServiceDid
         );
 
@@ -148,7 +148,12 @@ public class FeedProcessor
             throw new Exception("Not logged in!");
         }
 
-        var feedSkel = await feedInstance.GetFeedSkeleton(_session.Did, limit, cursor, cancellationToken);
+        var feedSkel = await feedInstance.GetFeedSkeleton(
+            _session.Did,
+            limit,
+            cursor,
+            cancellationToken
+        );
         var feedsInSize = feedSkel.Feed.Take(25).Select(s => new ATUri(s.Post));
         var hydratedRes = await _proto.Feed.GetPostsAsync(feedsInSize, cancellationToken);
         var hydrated = hydratedRes.HandleResult();
