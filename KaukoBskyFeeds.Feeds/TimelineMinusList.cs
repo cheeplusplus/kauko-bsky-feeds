@@ -171,21 +171,17 @@ public class TimelineMinusList : IFeed
             {
                 return new PostJudgement(PostType.Reply, true);
             }
-            else if (_feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly)
-            {
-                if (isFollowing(fvp.Reply.Parent?.Author.Did))
-                {
-                    return new PostJudgement(
-                        PostType.Reply,
-                        !isMuted(fvp.Reply.Parent?.Author.Did)
-                    );
-                }
-            }
-            else if (_feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail)
+            else if (
+                _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly
+                || _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
+            )
             {
                 if (
                     isFollowing(fvp.Reply?.Parent?.Author.Did)
-                    && isFollowing(fvp.Reply?.Root?.Author.Did)
+                    && (
+                        _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
+                        || isFollowing(fvp.Reply?.Root?.Author.Did)
+                    )
                 )
                 {
                     return new PostJudgement(
