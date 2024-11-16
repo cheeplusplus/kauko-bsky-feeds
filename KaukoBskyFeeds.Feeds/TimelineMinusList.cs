@@ -145,17 +145,21 @@ public class TimelineMinusList : IFeed
         if (fvp.Reason != null)
         {
             // TODO: Add SkeletonReasonRepost to the PostJudgement - we need the orig URI which getTimeline doesn't seem to provide
-            if (_feedConfig.ShowReposts == ShowRepostsSetting.All)
+            // Without the reason, they appear out of nowhere and are kinda confusing
+            /*if (_feedConfig.ShowReposts == ShowRepostsSetting.All)
             {
                 return new PostJudgement(PostType.Repost, true);
             }
-            else if (_feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly)
+            else if (_feedConfig.ShowReposts == ShowRepostsSetting.FollowingOnly)
             {
-                if (isFollowing(fvp.Post.Author.Did))
+                if (
+                    isFollowing(fvp.Post.Author.Did)
+                    && (!isInList(fvp.Post.Author.Did) || isMutual(fvp.Post.Author.Did))
+                )
                 {
                     return new PostJudgement(PostType.Repost, !isMuted(fvp.Post.Author.Did));
                 }
-            }
+            }*/
 
             return new PostJudgement(PostType.Repost, false);
         }
