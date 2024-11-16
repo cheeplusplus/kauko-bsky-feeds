@@ -3,6 +3,14 @@ using FishyFlip.Models;
 
 namespace KaukoBskyFeeds.Shared.Bsky.Models;
 
+public record CustomSkeletonFeedPost(
+    string Post,
+    SkeletonReasonRepost? Reason = null,
+    string? FeedContext = null
+);
+
+public record CustomSkeletonFeed(IEnumerable<CustomSkeletonFeedPost> Feed, string? Cursor);
+
 public record CustomFeedRecord(
     string Did,
     string DisplayName,

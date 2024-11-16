@@ -67,7 +67,9 @@ public class FeedProcessor
         }
     }
 
-    public async Task<Results<NotFound, UnauthorizedHttpResult, Ok<SkeletonFeed>>> GetFeedSkeleton(
+    public async Task<
+        Results<NotFound, UnauthorizedHttpResult, Ok<CustomSkeletonFeed>>
+    > GetFeedSkeleton(
         [FromHeader] string? authorization,
         string feed,
         int? limit = null,

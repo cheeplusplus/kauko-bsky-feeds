@@ -4,6 +4,7 @@ using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Shared.Bsky;
+using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Feeds;
@@ -35,7 +36,7 @@ public class TimelineMinusList : IFeed
 
     public string Description { get; init; }
 
-    public async Task<SkeletonFeed> GetFeedSkeleton(
+    public async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
         int? limit,
         string? cursor,
@@ -63,7 +64,7 @@ public class TimelineMinusList : IFeed
         var posts = postsRes.HandleResult();
         if (posts == null || posts.Feed.Length < 1 || cancellationToken.IsCancellationRequested)
         {
-            return new SkeletonFeed([], posts?.Cursor ?? cursor);
+            return new CustomSkeletonFeed([], posts?.Cursor ?? cursor);
         }
 
         var followingList = await _cache.GetFollowing(
@@ -87,7 +88,11 @@ public class TimelineMinusList : IFeed
 
         var filteredFeed = judgedFeed
             .Where(w => w.Judgement.ShouldShow)
-            .Select(s => new SkeletonFeedPost(s.PostUri, s.Judgement.RepostReason));
+            .Select(s => new CustomSkeletonFeedPost(
+                s.PostUri,
+                s.Judgement.RepostReason,
+                $"Reason: {s.Judgement.Type}"
+            ));
 
         if (limit.HasValue)
         {
@@ -95,7 +100,7 @@ public class TimelineMinusList : IFeed
             filteredFeed = filteredFeed.TakeLast(limit.Value);
         }
 
-        return new SkeletonFeed(filteredFeed.ToArray(), posts.Cursor);
+        return new CustomSkeletonFeed(filteredFeed, posts.Cursor);
     }
 
     private async Task<IEnumerable<ATDid>> GetMutuals(CancellationToken cancellationToken = default)
