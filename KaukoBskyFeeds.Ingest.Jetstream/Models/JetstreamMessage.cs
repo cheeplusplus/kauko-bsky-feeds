@@ -10,16 +10,16 @@ namespace KaukoBskyFeeds.Ingest.Jetstream.Models;
 public class JetstreamMessage
 {
     [JsonPropertyName("did")]
-    public string Did { get; set; } = null!;
+    public required string Did { get; set; }
 
     [JsonPropertyName("time_us")]
     public long TimeMicroseconds { get; set; }
 
-    public string Kind { get; set; } = null!;
+    public required string Kind { get; set; }
 
     // This should probably be a discriminator on 'kind' but all three types are just keyed (commit/identity/account)
     [JsonPropertyName("commit")]
-    public JetstreamCommit? Commit { get; set; } = null!;
+    public JetstreamCommit? Commit { get; set; }
 
     public string ToAtUri()
     {

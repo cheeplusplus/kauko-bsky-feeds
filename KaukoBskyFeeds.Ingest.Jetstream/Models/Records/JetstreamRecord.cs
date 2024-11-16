@@ -8,5 +8,5 @@ namespace KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 public abstract class JetstreamRecord
 {
     [JsonPropertyName("$type")]
-    public string Type { get; set; } = null!;
+    public required string Type { get; set; }
 }

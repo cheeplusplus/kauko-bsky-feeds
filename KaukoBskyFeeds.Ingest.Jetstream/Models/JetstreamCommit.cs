@@ -6,22 +6,22 @@ namespace KaukoBskyFeeds.Ingest.Jetstream.Models;
 public class JetstreamCommit
 {
     [JsonPropertyName("rev")]
-    public string Revision { get; set; } = null!;
+    public required string Revision { get; set; }
 
     [JsonPropertyName("operation")]
-    public string OperationString { get; set; } = null!;
+    public required string OperationString { get; set; }
 
     [JsonPropertyName("collection")]
-    public string Collection { get; set; } = null!;
+    public required string Collection { get; set; }
 
     [JsonPropertyName("rkey")]
-    public string RecordKey { get; set; } = null!;
+    public required string RecordKey { get; set; }
 
     [JsonPropertyName("record")]
     public JetstreamRecord? Record { get; set; } = default!;
 
     [JsonPropertyName("cid")]
-    public string Cid { get; set; } = null!;
+    public required string Cid { get; set; }
 
     // Helpers
     [JsonIgnore]

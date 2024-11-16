@@ -5,7 +5,7 @@ namespace KaukoBskyFeeds.Db;
 
 public class FeedDbContext(DbContextOptions<FeedDbContext> options) : DbContext(options)
 {
-    public DbSet<Post> Posts { get; set; }
+    public required DbSet<Post> Posts { get; set; }
 
     public string DbPath { get; } = "jetstream.db";
 

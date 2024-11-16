@@ -11,7 +11,7 @@ public class AppBskyFeedPost : JetstreamRecord
     public List<string>? Langs { get; set; }
 
     [JsonPropertyName("text")]
-    public string Text { get; set; } = null!;
+    public required string Text { get; set; }
 
     [JsonPropertyName("reply")]
     public AppBskyFeedReplyPost? Reply { get; set; }

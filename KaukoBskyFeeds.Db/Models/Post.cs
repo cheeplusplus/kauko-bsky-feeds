@@ -8,10 +8,10 @@ namespace KaukoBskyFeeds.Db.Models;
 public class Post
 {
     [Required]
-    public string Did { get; set; } = null!;
+    public required string Did { get; set; }
 
     [Required]
-    public string Rkey { get; set; } = null!;
+    public required string Rkey { get; set; }
 
     [Required]
     public DateTime EventTime { get; set; }
@@ -25,7 +25,7 @@ public class Post
 
     [Required]
     [MaxLength(3000)]
-    public string Text { get; set; } = null!;
+    public required string Text { get; set; }
 
     public string? ReplyParentUri { get; set; }
     public string? ReplyRootUri { get; set; }
@@ -39,12 +39,12 @@ public class Post
 
 public class PostEmbeds
 {
-    public List<PostEmbedImage> Images { get; set; } = null!;
+    public List<PostEmbedImage>? Images { get; set; }
     public string? RecordUri { get; set; }
 }
 
 public class PostEmbedImage
 {
-    public string RefLink { get; set; } = null!;
-    public string MimeType { get; set; } = null!;
+    public required string RefLink { get; set; }
+    public required string MimeType { get; set; }
 }

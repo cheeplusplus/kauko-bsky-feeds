@@ -9,35 +9,35 @@ namespace KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 public class AppBskyFeedPostEmbed
 {
     [JsonPropertyName("$type")]
-    public string Type { get; set; } = null!;
+    public required string Type { get; set; }
 }
 
 public class AppBskyFeedPostEmbedImages : AppBskyFeedPostEmbed
 {
     [JsonPropertyName("images")]
-    public List<AppBskyFeedPostEmbedImage> Images { get; set; } = null!;
+    public required List<AppBskyFeedPostEmbedImage> Images { get; set; }
 }
 
 public class AppBskyFeedPostEmbedImage
 {
     [JsonPropertyName("image")]
-    public AppBskyFeedPostEmbedImageImage Image { get; set; } = null!;
+    public required AppBskyFeedPostEmbedImageImage Image { get; set; }
 }
 
 public class AppBskyFeedPostEmbedImageImage
 {
     [JsonPropertyName("$type")]
-    public string Type { get; set; } = null!;
+    public required string Type { get; set; }
 
     [JsonPropertyName("ref")]
-    public AtRef? Ref { get; set; } = null!;
+    public AtRef? Ref { get; set; }
 
     [JsonPropertyName("mimeType")]
-    public string MimeType { get; set; } = null!;
+    public required string MimeType { get; set; }
 }
 
 public class AppBskyFeedPostEmbedRecord : AppBskyFeedPostEmbed
 {
     [JsonPropertyName("record")]
-    public AtStrongRef Record { get; set; } = null!;
+    public required AtStrongRef Record { get; set; }
 }
