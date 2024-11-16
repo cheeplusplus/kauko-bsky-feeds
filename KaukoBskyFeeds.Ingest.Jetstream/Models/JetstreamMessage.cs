@@ -15,11 +15,16 @@ public class JetstreamMessage
     [JsonPropertyName("time_us")]
     public long TimeMicroseconds { get; set; }
 
+    [JsonPropertyName("kind")]
     public required string Kind { get; set; }
 
     // This should probably be a discriminator on 'kind' but all three types are just keyed (commit/identity/account)
     [JsonPropertyName("commit")]
     public JetstreamCommit? Commit { get; set; }
+
+    [JsonIgnore]
+    public DateTime MessageTime =>
+        DateTimeOffset.FromUnixTimeMilliseconds(TimeMicroseconds / 1000).DateTime;
 
     public string ToAtUri()
     {

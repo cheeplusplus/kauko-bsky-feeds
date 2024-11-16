@@ -15,6 +15,8 @@ builder.Services.AddDbContext<FeedDbContext>(
         db.ConfigureWarnings(b => b.Log((RelationalEventId.CommandExecuted, LogLevel.Trace)));
     }
 );
+
+// builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();
 builder.Services.AddHostedService<JetstreamWorker>();
 

@@ -18,9 +18,7 @@ public static class IngestExtensions
         {
             Did = post.Did,
             Rkey = post.Commit.RecordKey,
-            EventTime = DateTimeOffset
-                .FromUnixTimeMilliseconds(post.TimeMicroseconds / 1000)
-                .DateTime,
+            EventTime = post.MessageTime,
             EventTimeUs = post.TimeMicroseconds,
             CreatedAt = record.CreatedAt,
             Langs = record.Langs,

@@ -1,6 +1,6 @@
-using System.Reflection.Metadata;
 using System.Threading.Channels;
 using KaukoBskyFeeds.Db;
+using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Shared.Bsky;
@@ -8,7 +8,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.VisualBasic;
 
 namespace KaukoBskyFeeds.Ingest.Workers;
 
@@ -20,6 +19,7 @@ public class JetstreamWorker : IHostedService
     private readonly Channel<JetstreamMessage> _channel =
         Channel.CreateUnbounded<JetstreamMessage>();
     private readonly CancellationTokenSource _channelCancel = new();
+    private Post? _cursorEvent;
     private DateTime _lastSave = DateTime.MinValue;
     private DateTime _lastCleanup = DateTime.MinValue;
 
@@ -40,21 +40,6 @@ public class JetstreamWorker : IHostedService
         // Begin to consume the reading channel
         _ = Task.Run(() => ReadChannel(_channelCancel.Token), cancellationToken);
 
-        // Pull the last event for the cursor time
-        // We may want to save it seperately if we consume any other feeds but this works for now
-        var lastEvent = await _db
-            .Posts.OrderByDescending(o => o.EventTime)
-            .LastOrDefaultAsync(cancellationToken);
-
-        if (lastEvent == null)
-        {
-            _logger.LogInformation("Starting new stream");
-        }
-        else
-        {
-            _logger.LogInformation("Resuming stream from {lastEventTime}", lastEvent.EventTimeUs);
-        }
-
         // Start consuming
         await _consumer.Start(FetchLatestCursor, cancellationToken: cancellationToken);
 
@@ -72,12 +57,18 @@ public class JetstreamWorker : IHostedService
 
     private long? FetchLatestCursor()
     {
-        var lastEvent = _db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
-        if (lastEvent == null)
+        _cursorEvent = _db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
+        if (_cursorEvent == null)
         {
+            _logger.LogInformation("No events found, starting new stream");
             return null;
         }
-        return lastEvent.EventTimeUs;
+
+        _logger.LogInformation(
+            "Events found, resuming stream from {lastEventTime}",
+            _cursorEvent.EventTimeUs
+        );
+        return _cursorEvent.EventTimeUs;
     }
 
     private async void ReadChannel(CancellationToken cancellationToken)
@@ -127,7 +118,9 @@ public class JetstreamWorker : IHostedService
             var post = message.ToDbPost();
             if (post != null)
             {
-                if (!_db.Posts.Local.Any(c => c.Did == post.Did && c.Rkey == post.Rkey))
+                // Detect duplicates using the cursor event
+                // Ideally we'd upsert or something more useful/correct
+                if (post.ToUri() != _cursorEvent?.ToUri())
                 {
                     _db.Add(post);
                 }
@@ -139,6 +132,7 @@ public class JetstreamWorker : IHostedService
         }
         else if (message.Commit.Operation == JetstreamOperation.Delete)
         {
+            // Directly execute the delete so we don't have to find it first
             await _db
                 .Posts.Where(w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey)
                 .ExecuteDeleteAsync(cancellationToken);
@@ -149,6 +143,11 @@ public class JetstreamWorker : IHostedService
         {
             await CommitDb(cancellationToken);
             _lastSave = DateTime.Now;
+
+            if (message.MessageTime < (DateTime.UtcNow - TimeSpan.FromMinutes(30)))
+            {
+                _logger.LogInformation("Caught up to {date}", message.MessageTime);
+            }
         }
 
         // Clean up every 10 minutes

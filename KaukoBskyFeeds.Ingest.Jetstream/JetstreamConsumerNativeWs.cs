@@ -78,7 +78,7 @@ public class JetstreamConsumerNativeWs : BaseJetstreamConsumer
 
         while (_wsClient.State == WebSocketState.Open)
         {
-            var result = await _wsClient.ReceiveAsync(buffer, cancellationToken);
+            WebSocketReceiveResult result;
 
             using var textStream = new MemoryStream();
             using (var msgStream = new MemoryStream())
@@ -92,7 +92,7 @@ public class JetstreamConsumerNativeWs : BaseJetstreamConsumer
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    await msgStream.CopyToAsync(textStream);
+                    await msgStream.CopyToAsync(textStream, cancellationToken);
                 }
                 else if (result.MessageType == WebSocketMessageType.Binary)
                 {

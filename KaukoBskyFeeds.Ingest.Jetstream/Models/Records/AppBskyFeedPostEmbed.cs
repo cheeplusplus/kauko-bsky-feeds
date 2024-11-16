@@ -6,11 +6,7 @@ namespace KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 [JsonPolymorphic(IgnoreUnrecognizedTypeDiscriminators = true)]
 [JsonDerivedType(typeof(AppBskyFeedPostEmbedImages), BskyConstants.POST_EMBED_TYPE_IMAGES)]
 [JsonDerivedType(typeof(AppBskyFeedPostEmbedRecord), BskyConstants.POST_EMBED_TYPE_RECORD)]
-public class AppBskyFeedPostEmbed
-{
-    [JsonPropertyName("$type")]
-    public required string Type { get; set; }
-}
+public class AppBskyFeedPostEmbed { }
 
 public class AppBskyFeedPostEmbedImages : AppBskyFeedPostEmbed
 {

@@ -21,7 +21,7 @@ public class JetstreamCommit
     public JetstreamRecord? Record { get; set; } = default!;
 
     [JsonPropertyName("cid")]
-    public required string Cid { get; set; }
+    public string? Cid { get; set; }
 
     // Helpers
     [JsonIgnore]
