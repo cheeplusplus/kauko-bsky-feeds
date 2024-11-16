@@ -121,7 +121,13 @@ public class TimelineMinusList : IFeed
             cancellationToken
         );
 
-        return followingList.Intersect(followersList, new ATDidComparer());
+        // For some reason the comparer isn't working so do this the hard way
+        return followingList
+            .Select(s => s.Handler)
+            .Intersect(followersList.Select(s => s.Handler))
+            .Select(ATDid.Create)
+            .Where(w => w != null)
+            .Cast<ATDid>();
     }
 
     private PostJudgement JudgePost(
