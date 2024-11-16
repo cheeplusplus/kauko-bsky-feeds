@@ -149,14 +149,17 @@
                         },
                         "ShowReposts": {
                             "description": "Show reposts?",
-                            "type": "boolean",
-                            "default": true
+                            "type": "string",
+                            "default": "All",
+                            "enum": [
+                                "All",
+                                "None",
+                                "FollowingOnly"
+                            ]
                         },
                         "ShowReplies": {
                             "description": "Show replies?",
-                            "type": [
-                                "string"
-                            ],
+                            "type": "string",
                             "default": "All",
                             "enum": [
                                 "All",
@@ -167,9 +170,7 @@
                         },
                         "ShowQuotePosts": {
                             "description": "Show quote posts?",
-                            "type": [
-                                "string"
-                            ],
+                            "type": "string",
                             "default": "All",
                             "enum": [
                                 "All",

@@ -12,13 +12,21 @@ public record TimelineMinusListFeedConfig(
     List<string>? MuteUsers = null,
     bool RestrictToFeedOwner = true,
     bool ShowSelfPosts = true,
-    bool ShowReposts = true,
+    [property: JsonConverter(typeof(JsonStringEnumConverter<ShowRepliesSetting>))]
+        ShowRepostsSetting ShowReposts = ShowRepostsSetting.All,
     [property: JsonConverter(typeof(JsonStringEnumConverter<ShowRepliesSetting>))]
         ShowRepliesSetting ShowReplies = ShowRepliesSetting.All,
     [property: JsonConverter(typeof(JsonStringEnumConverter<ShowQuotePostsSetting>))]
         ShowQuotePostsSetting ShowQuotePosts = ShowQuotePostsSetting.All,
     bool IncludeListMutuals = false
 ) : BaseFeedConfig(DisplayName, Description);
+
+public enum ShowRepostsSetting
+{
+    All,
+    None,
+    FollowingOnly,
+}
 
 public enum ShowRepliesSetting
 {

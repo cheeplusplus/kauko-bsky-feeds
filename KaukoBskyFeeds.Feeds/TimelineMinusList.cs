@@ -14,6 +14,7 @@ public class TimelineMinusList : IFeed
     private readonly ATProtocol _proto;
     private readonly TimelineMinusListFeedConfig _feedConfig;
     private readonly IBskyCache _cache;
+    private readonly ATDidComparer _atDidComparer = new();
 
     public TimelineMinusList(
         ILogger<TimelineMinusList> logger,
@@ -47,9 +48,9 @@ public class TimelineMinusList : IFeed
             throw new NotLoggedInException();
         }
 
-        var didComparer = new ATDidComparer();
-
-        if (_feedConfig.RestrictToFeedOwner && !didComparer.Equals(requestor, _proto.Session.Did))
+        if (
+            _feedConfig.RestrictToFeedOwner && !_atDidComparer.Equals(requestor, _proto.Session.Did)
+        )
         {
             throw new FeedProhibitedException();
         }
@@ -77,73 +78,16 @@ public class TimelineMinusList : IFeed
             cancellationToken
         );
 
-        bool isFollowing(ATDid? did) => did != null && followingList.Contains(did, didComparer);
-        bool isMutual(ATDid? did) => did != null && mutualsDids.Contains(did, didComparer);
-        bool isInList(ATDid? did) => did != null && listMemberDids.Contains(did, didComparer);
-        bool isMuted(ATDid? did) =>
-            did != null && (_feedConfig.MuteUsers?.Contains(did.Handler) ?? false);
-
         _logger.LogDebug("Processing feed");
-        var filteredFeed = posts
-            .Feed.Where(w =>
-                // show own posts
-                (
-                    _feedConfig.ShowSelfPosts
-                    && w.Post.Author.Did.Handler == _proto.Session?.Did?.Handler
-                )
-                || (
-                    // followingList.Contains(w.Post.Author.Did, new ATDidComparer()) // someone we're following
-                    !isMuted(w.Post.Author.Did) // drop muted users
-                    && (
-                        // not a repost
-                        _feedConfig.ShowReposts || (!_feedConfig.ShowReposts && w.Reason == null)
-                    )
-                    && (
-                        // not a reply, or a reply to someone we're following
-                        w.Reply == null
-                        || _feedConfig.ShowReplies == ShowRepliesSetting.All
-                        || (
-                            _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
-                            && isFollowing(w.Reply.Parent?.Author.Did)
-                            && !isMuted(w.Reply.Parent?.Author.Did)
-                        )
-                        || (
-                            _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly
-                            && isFollowing(w.Reply?.Parent?.Author.Did)
-                            && isFollowing(w.Reply?.Root?.Author.Did)
-                            && !isMuted(w.Reply?.Parent?.Author.Did)
-                            && !isMuted(w.Reply?.Root?.Author.Did)
-                        )
-                    )
-                    && (
-                        // not a quote post, or a quote post to someone we're following
-                        _feedConfig.ShowQuotePosts == ShowQuotePostsSetting.All
-                        || (
-                            _feedConfig.ShowQuotePosts == ShowQuotePostsSetting.FollowingOnly
-                            && (
-                                w.Post.Record?.Embed == null
-                                || (
-                                    w.Post.Record.Embed is RecordViewEmbed re
-                                    && isFollowing(re.Record.Author.Did)
-                                    && !isMuted(re.Record.Author.Did)
-                                )
-                            )
-                        )
-                    )
-                    && (
-                        // not in the artist list, unless they're a mutual or in the always-show list
-                        !isInList(w.Post.Author.Did)
-                        || (
-                            (_feedConfig.IncludeListMutuals && isMutual(w.Post.Author.Did))
-                            || (
-                                _feedConfig.AlwaysShowListUser?.Contains(w.Post.Author.Did.Handler)
-                                ?? false
-                            )
-                        )
-                    )
-                )
-            )
-            .Select(s => new SkeletonFeedPost(s.Post.Uri.ToString()));
+        var judgedFeed = posts.Feed.Select(s => new
+        {
+            Judgement = JudgePost(s, followingList, mutualsDids, listMemberDids),
+            PostUri = s.Post.Uri.ToString(),
+        });
+
+        var filteredFeed = judgedFeed
+            .Where(w => w.Judgement.ShouldShow)
+            .Select(s => new SkeletonFeedPost(s.PostUri, s.Judgement.RepostReason));
 
         if (limit.HasValue)
         {
@@ -173,5 +117,138 @@ public class TimelineMinusList : IFeed
         );
 
         return followingList.Intersect(followersList, new ATDidComparer());
+    }
+
+    private PostJudgement JudgePost(
+        FeedViewPost fvp,
+        IEnumerable<ATDid> followingDids,
+        IEnumerable<ATDid> mutualsDids,
+        IEnumerable<ATDid> listMemberDids
+    )
+    {
+        bool isFollowing(ATDid? did) => did != null && followingDids.Contains(did, _atDidComparer);
+        bool isMutual(ATDid? did) => did != null && mutualsDids.Contains(did, _atDidComparer);
+        bool isInList(ATDid? did) => did != null && listMemberDids.Contains(did, _atDidComparer);
+        bool isMuted(ATDid? did) =>
+            did != null && (_feedConfig.MuteUsers?.Contains(did.Handler) ?? false);
+
+        // Self post
+        if (
+            _feedConfig.ShowSelfPosts
+            && fvp.Post.Author.Did.Handler == _proto.Session?.Did?.Handler
+        )
+        {
+            return new PostJudgement(PostType.SelfPost, true);
+        }
+
+        // Repost
+        if (fvp.Reason != null)
+        {
+            // TODO: Add SkeletonReasonRepost to the PostJudgement - we need the orig URI which getTimeline doesn't seem to provide
+            if (_feedConfig.ShowReposts == ShowRepostsSetting.All)
+            {
+                return new PostJudgement(PostType.Repost, true);
+            }
+            else if (_feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly)
+            {
+                if (isFollowing(fvp.Post.Author.Did))
+                {
+                    return new PostJudgement(PostType.Repost, !isMuted(fvp.Post.Author.Did));
+                }
+            }
+
+            return new PostJudgement(PostType.Repost, false);
+        }
+
+        // Reply
+        if (fvp.Reply != null)
+        {
+            if (_feedConfig.ShowReplies == ShowRepliesSetting.All)
+            {
+                return new PostJudgement(PostType.Reply, true);
+            }
+            else if (_feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly)
+            {
+                if (isFollowing(fvp.Reply.Parent?.Author.Did))
+                {
+                    return new PostJudgement(
+                        PostType.Reply,
+                        !isMuted(fvp.Reply.Parent?.Author.Did)
+                    );
+                }
+            }
+            else if (_feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail)
+            {
+                if (
+                    isFollowing(fvp.Reply?.Parent?.Author.Did)
+                    && isFollowing(fvp.Reply?.Root?.Author.Did)
+                )
+                {
+                    return new PostJudgement(
+                        PostType.Reply,
+                        !isMuted(fvp.Reply?.Parent?.Author.Did)
+                            && !isMuted(fvp.Reply?.Root?.Author.Did)
+                    );
+                }
+            }
+
+            return new PostJudgement(PostType.Reply, false);
+        }
+
+        // Quote post
+        if (fvp.Post.Record?.Embed is RecordViewEmbed re)
+        {
+            if (_feedConfig.ShowQuotePosts == ShowQuotePostsSetting.All)
+            {
+                return new PostJudgement(PostType.QuotePost, true);
+            }
+            else if (_feedConfig.ShowQuotePosts == ShowQuotePostsSetting.FollowingOnly)
+            {
+                if (isFollowing(re.Record.Author.Did))
+                {
+                    return new PostJudgement(PostType.QuotePost, !isMuted(re.Record.Author.Did));
+                }
+            }
+
+            return new PostJudgement(PostType.QuotePost, false);
+        }
+
+        // Target list
+        if (isInList(fvp.Post.Author.Did))
+        {
+            if (_feedConfig.AlwaysShowListUser?.Contains(fvp.Post.Author.Did.Handler) ?? false)
+            {
+                return new PostJudgement(PostType.InListAlwaysShow, !isMuted(fvp.Post.Author.Did));
+            }
+            else if (_feedConfig.IncludeListMutuals && isMutual(fvp.Post.Author.Did))
+            {
+                return new PostJudgement(PostType.InListMutual, !isMuted(fvp.Post.Author.Did));
+            }
+
+            return new PostJudgement(PostType.InList, false);
+        }
+
+        // Default to showing
+        return new PostJudgement(PostType.Normal, !isMuted(fvp.Post.Author.Did));
+    }
+
+    private record PostJudgement(
+        PostType Type,
+        bool ShouldShow,
+        SkeletonReasonRepost? RepostReason = null
+    );
+
+    private enum PostType
+    {
+        NotFollowing,
+        SelfPost,
+        Muted,
+        Repost,
+        Reply,
+        QuotePost,
+        InList,
+        InListAlwaysShow,
+        InListMutual,
+        Normal,
     }
 }
