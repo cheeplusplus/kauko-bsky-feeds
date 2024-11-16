@@ -123,34 +123,49 @@ public class JetstreamWorker : IHostedService
             return;
         }
 
+        // Try and fetch the post first because augh
+        var storedPost = _db.Posts.Local.SingleOrDefault(s =>
+            s.Did == message.Did && s.Rkey == message.Commit.RecordKey
+        );
+
         if (message.Commit.Operation == JetstreamOperation.Create)
         {
-            var post = message.ToDbPost();
-            if (post != null)
+            if (storedPost == null)
             {
-                // Detect duplicates using the cursor event
-                // Ideally we'd upsert or something more useful/correct
-                if (post.ToUri() != _cursorEvent?.ToUri())
+                var post = message.ToDbPost();
+                if (post != null)
                 {
-                    _db.Add(post);
+                    try
+                    {
+                        _db.Posts.Add(post);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Just ignore dupes, not sure why they happen but they do
+                    }
                 }
-                else
-                {
-                    _logger.LogInformation("Got duplicate record {rec}", post);
-                }
+            }
+            else
+            {
+                _logger.LogTrace("Saw duplicate post {postUri}", storedPost.ToUri());
             }
         }
         else if (message.Commit.Operation == JetstreamOperation.Delete)
         {
-            // Directly execute the delete so we don't have to find it first
-            await _db
-                .Posts.Where(w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey)
-                .ExecuteDeleteAsync(cancellationToken);
+            if (storedPost != null)
+            {
+                _db.Posts.Remove(storedPost);
+            }
+            else
+            {
+                _logger.LogTrace("Tried to delete post we don't have {postUri}", message.ToAtUri());
+            }
         }
         else
         {
+            // TODO: Support updates
             _logger.LogTrace(
-                "Unsupported message operation {op} on {msgUri}",
+                "Unsupported message operation {op} on {postUri}",
                 message.Commit.Operation,
                 message.ToAtUri()
             );
@@ -164,9 +179,12 @@ public class JetstreamWorker : IHostedService
             _lastSaveMarker = message.MessageTime;
 
             // Log on us catching up if we're behind
-            if (_lastSaveMarker < (DateTime.UtcNow - TimeSpan.FromMinutes(30)))
+            if (_lastSaveMarker < (DateTime.UtcNow - TimeSpan.FromSeconds(60)))
             {
-                _logger.LogInformation("Caught up to {date}", message.MessageTime);
+                _logger.LogInformation(
+                    "Catching up, {timespan} behind",
+                    DateTime.UtcNow - message.MessageTime
+                );
             }
         }
 
@@ -188,6 +206,7 @@ public class JetstreamWorker : IHostedService
         try
         {
             var count = await _db.SaveChangesAsync(cancellationToken);
+            _db.ChangeTracker.Clear();
             _logger.LogDebug("Committed {count} changes to disk", count);
         }
         catch (DbUpdateException due)
@@ -204,6 +223,7 @@ public class JetstreamWorker : IHostedService
                         fe.State = EntityState.Detached; // detatch it
                     }
                     await _db.SaveChangesAsync(cancellationToken);
+                    _db.ChangeTracker.Clear();
                     return;
                 }
             }
