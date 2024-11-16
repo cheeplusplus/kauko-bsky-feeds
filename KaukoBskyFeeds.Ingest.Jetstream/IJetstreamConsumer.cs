@@ -62,7 +62,7 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
         wantedCollections ??= DEFAULT_COLLECTIONS;
 
         var querySegments = new Dictionary<string, string>();
-        if (cursor != null && cursor > 0)
+        if (cursor != null && cursor >= 0)
         {
             var cursorStr = cursor.ToString();
             if (cursorStr != null)

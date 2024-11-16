@@ -6,6 +6,7 @@ using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -16,20 +17,24 @@ public class JetstreamWorker : IHostedService
     private readonly ILogger<JetstreamWorker> _logger;
     private readonly FeedDbContext _db;
     private readonly IJetstreamConsumer _consumer;
+    private readonly bool _consumeFromHistoricFeed = false;
     private readonly Channel<JetstreamMessage> _channel =
         Channel.CreateUnbounded<JetstreamMessage>();
     private readonly CancellationTokenSource _channelCancel = new();
     private Post? _cursorEvent;
     private DateTime _lastSave = DateTime.MinValue;
+    private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
 
     public JetstreamWorker(
         ILogger<JetstreamWorker> logger,
+        IConfiguration configuration,
         FeedDbContext db,
         IJetstreamConsumer consumer
     )
     {
         _logger = logger;
+        _consumeFromHistoricFeed = configuration.GetValue<bool>("IngestConfig:ConsumeHistoricFeed");
         _db = db;
         _consumer = consumer;
         _consumer.Message += (_, msg) => _channel.Writer.TryWrite(msg);
@@ -60,8 +65,16 @@ public class JetstreamWorker : IHostedService
         _cursorEvent = _db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
         if (_cursorEvent == null)
         {
-            _logger.LogInformation("No events found, starting new stream");
-            return null;
+            if (_consumeFromHistoricFeed)
+            {
+                _logger.LogInformation("No events found, starting from earliest available");
+                return 0;
+            }
+            else
+            {
+                _logger.LogInformation("No events found, starting from now");
+                return null;
+            }
         }
 
         _logger.LogInformation(
@@ -110,10 +123,7 @@ public class JetstreamWorker : IHostedService
             return;
         }
 
-        if (
-            message.Commit.Operation == JetstreamOperation.Create
-            || message.Commit.Operation == JetstreamOperation.Update
-        )
+        if (message.Commit.Operation == JetstreamOperation.Create)
         {
             var post = message.ToDbPost();
             if (post != null)
@@ -137,14 +147,24 @@ public class JetstreamWorker : IHostedService
                 .Posts.Where(w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey)
                 .ExecuteDeleteAsync(cancellationToken);
         }
+        else
+        {
+            _logger.LogTrace(
+                "Unsupported message operation {op} on {msgUri}",
+                message.Commit.Operation,
+                message.ToAtUri()
+            );
+        }
 
         // Save every 10 seconds
         if (DateTime.Now - TimeSpan.FromSeconds(10) > _lastSave)
         {
             await CommitDb(cancellationToken);
             _lastSave = DateTime.Now;
+            _lastSaveMarker = message.MessageTime;
 
-            if (message.MessageTime < (DateTime.UtcNow - TimeSpan.FromMinutes(30)))
+            // Log on us catching up if we're behind
+            if (_lastSaveMarker < (DateTime.UtcNow - TimeSpan.FromMinutes(30)))
             {
                 _logger.LogInformation("Caught up to {date}", message.MessageTime);
             }

@@ -22,9 +22,6 @@ public class AppBskyFeedPostEmbedImage
 
 public class AppBskyFeedPostEmbedImageImage
 {
-    [JsonPropertyName("$type")]
-    public required string Type { get; set; }
-
     [JsonPropertyName("ref")]
     public AtRef? Ref { get; set; }
 
