@@ -137,6 +137,17 @@ public class TimelineMinusList : IFeed
         bool isMuted(ATDid? did) =>
             did != null && (_feedConfig.MuteUsers?.Contains(did.Handler) ?? false);
 
+        // A user is visible if: we are following them, and they are: not in the list | a mutual | always shown
+        // This check should only be used in cases where we care if we're following the person
+        bool isVisible(ATDid? did) =>
+            did != null
+            && isFollowing(did)
+            && (
+                !isInList(did)
+                || isMutual(did)
+                || (_feedConfig.AlwaysShowListUser?.Contains(did.Handler) ?? true)
+            );
+
         // Self post
         if (
             _feedConfig.ShowSelfPosts
@@ -157,10 +168,7 @@ public class TimelineMinusList : IFeed
             }
             else if (_feedConfig.ShowReposts == ShowRepostsSetting.FollowingOnly)
             {
-                if (
-                    isFollowing(fvp.Post.Author.Did)
-                    && (!isInList(fvp.Post.Author.Did) || isMutual(fvp.Post.Author.Did))
-                )
+                if (isVisible(fvp.Post.Author.Did))
                 {
                     return new PostJudgement(PostType.Repost, !isMuted(fvp.Post.Author.Did));
                 }
@@ -182,10 +190,10 @@ public class TimelineMinusList : IFeed
             )
             {
                 if (
-                    isFollowing(fvp.Reply?.Parent?.Author.Did)
+                    isVisible(fvp.Reply?.Parent?.Author.Did)
                     && (
                         _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
-                        || isFollowing(fvp.Reply?.Root?.Author.Did)
+                        || isVisible(fvp.Reply?.Root?.Author.Did)
                     )
                 )
                 {
@@ -209,7 +217,7 @@ public class TimelineMinusList : IFeed
             }
             else if (_feedConfig.ShowQuotePosts == ShowQuotePostsSetting.FollowingOnly)
             {
-                if (isFollowing(re.Record.Author.Did))
+                if (isVisible(re.Record.Author.Did))
                 {
                     return new PostJudgement(PostType.QuotePost, !isMuted(re.Record.Author.Did));
                 }
