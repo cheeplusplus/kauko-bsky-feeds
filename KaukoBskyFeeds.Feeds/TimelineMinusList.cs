@@ -80,10 +80,20 @@ public class TimelineMinusList : IFeed
         );
 
         _logger.LogDebug("Processing feed");
-        var judgedFeed = posts.Feed.Select(s => new
+        var judgedFeed = posts.Feed.Select(s =>
         {
-            Judgement = JudgePost(s, followingList, mutualsDids, listMemberDids),
-            PostUri = s.Post.Uri.ToString(),
+            PostJudgement judgement;
+            try
+            {
+                judgement = JudgePost(s, followingList, mutualsDids, listMemberDids);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to judge post {s}", s);
+                judgement = new PostJudgement(PostType.ErrorState, false);
+            }
+
+            return new { Judgement = judgement, PostUri = s.Post.Uri.ToString() };
         });
 
         var filteredFeed = judgedFeed
@@ -100,7 +110,7 @@ public class TimelineMinusList : IFeed
             filteredFeed = filteredFeed.TakeLast(limit.Value);
         }
 
-        return new CustomSkeletonFeed(filteredFeed, posts.Cursor);
+        return new CustomSkeletonFeed(filteredFeed.ToList(), posts.Cursor);
     }
 
     private async Task<IEnumerable<ATDid>> GetMutuals(CancellationToken cancellationToken = default)
@@ -127,7 +137,8 @@ public class TimelineMinusList : IFeed
             .Intersect(followersList.Select(s => s.Handler))
             .Select(ATDid.Create)
             .Where(w => w != null)
-            .Cast<ATDid>();
+            .Cast<ATDid>()
+            .ToList();
     }
 
     private PostJudgement JudgePost(
@@ -186,6 +197,11 @@ public class TimelineMinusList : IFeed
         // Reply
         if (fvp.Reply != null)
         {
+            if (fvp.Reply?.Parent?.Author == null || fvp.Reply?.Root?.Author == null)
+            {
+                return new PostJudgement(PostType.ContextDeleted, false);
+            }
+
             if (_feedConfig.ShowReplies == ShowRepliesSetting.All)
             {
                 return new PostJudgement(PostType.Reply, true);
@@ -259,7 +275,6 @@ public class TimelineMinusList : IFeed
 
     private enum PostType
     {
-        NotFollowing,
         SelfPost,
         Muted,
         Repost,
@@ -269,5 +284,7 @@ public class TimelineMinusList : IFeed
         InListAlwaysShow,
         InListMutual,
         Normal,
+        ContextDeleted,
+        ErrorState,
     }
 }
