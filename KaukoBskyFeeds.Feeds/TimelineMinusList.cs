@@ -196,7 +196,7 @@ public class TimelineMinusList : IFeed
         }
 
         // Quote post
-        if (fvp.Post.Record?.Embed is RecordViewEmbed re)
+        if (fvp.Post.Embed is RecordViewEmbed re)
         {
             if (_feedConfig.ShowQuotePosts == ShowQuotePostsSetting.All)
             {
