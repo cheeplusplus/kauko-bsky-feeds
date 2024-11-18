@@ -16,7 +16,7 @@ public static class BskyAuth
     } */
 
     /// <summary>
-    /// Get the DID from the server-to-server auth header. Does NOT validate!
+    /// Get the DID from the server-to-server auth header. Does NOT validate signatures!
     /// </summary>
     /// <param name="authorization">Authorization header value</param>
     /// <param name="expectedAudience">Assert an audience</param>

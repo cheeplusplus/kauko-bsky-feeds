@@ -1,6 +1,7 @@
+using FishyFlip;
+using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
-using KaukoBskyFeeds.Web;
 using Microsoft.AspNetCore.Http.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,53 +31,46 @@ builder.Services.Configure<JsonOptions>(options =>
 );
 
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton(f =>
+{
+    var logger = f.GetService<ILogger<ATProtocol>>();
+    return new ATProtocolBuilder().EnableAutoRenewSession(true).WithLogger(logger).Build();
+});
 builder.Services.AddSingleton<IBskyCache, BskyCache>();
-builder.Services.AddSingleton<FeedProcessor>();
+builder.Services.AddSingleton<FeedRegistry>();
+
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
-var bskyConfig = app.Configuration.GetSection("BskyConfig").Get<BskyConfigBlock>();
-if (bskyConfig == null)
-{
-    throw new Exception("Failed to load config");
-}
-
 app.MapGet("/", () => "Hello World!");
 
-app.MapGet(
-    "/.well-known/did.json",
-    () =>
-        new Dictionary<string, dynamic>
-        {
-            { "@context", new string[] { "https://www.w3.org/ns/did/v1" } },
-            { "id", bskyConfig.Identity.ServiceDid },
+var bskyConfig = app.Configuration.GetSection("BskyConfig").Get<BskyConfigBlock>();
+if (bskyConfig != null)
+{
+    app.MapGet(
+        "/.well-known/did.json",
+        () =>
+            new Dictionary<string, dynamic>
             {
-                "service",
-                new List<Dictionary<string, string>>
+                { "@context", new string[] { "https://www.w3.org/ns/did/v1" } },
+                { "id", bskyConfig.Identity.ServiceDid },
                 {
-                    new()
+                    "service",
+                    new List<Dictionary<string, string>>
                     {
-                        { "id", "#bsky_fg" },
-                        { "type", "BskyFeedGenerator" },
-                        { "serviceEndpoint", $"https://{bskyConfig.Identity.Hostname}" },
-                    },
-                }
-            },
-        }
-);
-
-var feedProcessor = app.Services.GetRequiredService<FeedProcessor>();
-app.MapGet("/xrpc/app.bsky.feed.getFeedSkeleton", feedProcessor.GetFeedSkeleton);
-app.MapGet("/xrpc/app.bsky.feed.describeFeedGenerator", feedProcessor.DescribeFeedGenerator);
-
-if (app.Environment.IsDevelopment())
-{
-    app.MapGet("/previewFeed", feedProcessor.GetHydratedFeed);
+                        new()
+                        {
+                            { "id", "#bsky_fg" },
+                            { "type", "BskyFeedGenerator" },
+                            { "serviceEndpoint", $"https://{bskyConfig.Identity.Hostname}" },
+                        },
+                    }
+                },
+            }
+    );
 }
 
-if (bskyConfig.EnableInstall)
-{
-    app.MapPost("/install", feedProcessor.Install);
-}
+app.MapControllers();
 
 app.Run();

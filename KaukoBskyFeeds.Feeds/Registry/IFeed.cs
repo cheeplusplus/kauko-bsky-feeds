@@ -1,13 +1,10 @@
 using FishyFlip.Models;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 
-namespace KaukoBskyFeeds.Feeds;
+namespace KaukoBskyFeeds.Feeds.Registry;
 
 public interface IFeed
 {
-    public string DisplayName { get; }
-    public string Description { get; }
-
     Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
         int? limit,

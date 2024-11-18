@@ -3,38 +3,22 @@ using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Feeds.Config;
+using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Feeds;
 
-public class TimelineMinusList : IFeed
+[BskyFeed(nameof(TimelineMinusList), typeof(TimelineMinusListFeedConfig))]
+public class TimelineMinusList(
+    ILogger<TimelineMinusList> logger,
+    ATProtocol proto,
+    TimelineMinusListFeedConfig feedConfig,
+    IBskyCache cache
+) : IFeed
 {
-    private readonly ILogger<TimelineMinusList> _logger;
-    private readonly ATProtocol _proto;
-    private readonly TimelineMinusListFeedConfig _feedConfig;
-    private readonly IBskyCache _cache;
     private readonly ATDidComparer _atDidComparer = new();
-
-    public TimelineMinusList(
-        ILogger<TimelineMinusList> logger,
-        ATProtocol proto,
-        TimelineMinusListFeedConfig feedConfig,
-        IBskyCache cache
-    )
-    {
-        _logger = logger;
-        _proto = proto;
-        _feedConfig = feedConfig;
-        _cache = cache;
-        DisplayName = feedConfig.DisplayName;
-        Description = feedConfig.Description;
-    }
-
-    public string DisplayName { get; init; }
-
-    public string Description { get; init; }
 
     public async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
@@ -43,20 +27,18 @@ public class TimelineMinusList : IFeed
         CancellationToken cancellationToken = default
     )
     {
-        _logger.LogDebug("Fetching timeline");
-        if (_proto.Session == null)
+        logger.LogDebug("Fetching timeline");
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
 
-        if (
-            _feedConfig.RestrictToFeedOwner && !_atDidComparer.Equals(requestor, _proto.Session.Did)
-        )
+        if (feedConfig.RestrictToFeedOwner && !_atDidComparer.Equals(requestor, proto.Session.Did))
         {
             throw new FeedProhibitedException();
         }
 
-        var postsRes = await _proto.Feed.GetTimelineAsync(
+        var postsRes = await proto.Feed.GetTimelineAsync(
             limit: 100, // assume we need to fetch more than we're going to show
             cursor: cursor,
             cancellationToken: cancellationToken
@@ -67,29 +49,25 @@ public class TimelineMinusList : IFeed
             return new CustomSkeletonFeed([], posts?.Cursor ?? cursor);
         }
 
-        var followingList = await _cache.GetFollowing(
-            _proto,
-            _proto.Session.Did,
-            cancellationToken
-        );
+        var followingList = await cache.GetFollowing(proto, proto.Session.Did, cancellationToken);
         var mutualsDids = await GetMutuals(cancellationToken);
-        var listMemberDids = await _cache.GetListMembers(
-            _proto,
-            new ATUri(_feedConfig.ListUri),
+        var listMemberDids = await cache.GetListMembers(
+            proto,
+            new ATUri(feedConfig.ListUri),
             cancellationToken
         );
 
-        _logger.LogDebug("Processing feed");
+        logger.LogDebug("Processing feed");
         var judgedFeed = posts.Feed.Select(s =>
         {
             PostJudgement judgement;
             try
             {
-                judgement = JudgePost(s, followingList, mutualsDids, listMemberDids);
+                judgement = JudgePost(s, feedConfig, followingList, mutualsDids, listMemberDids);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to judge post {s}", s);
+                logger.LogError(ex, "Failed to judge post {s}", s);
                 judgement = new PostJudgement(PostType.ErrorState, false);
             }
 
@@ -115,21 +93,13 @@ public class TimelineMinusList : IFeed
 
     private async Task<IEnumerable<ATDid>> GetMutuals(CancellationToken cancellationToken = default)
     {
-        if (_proto.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
 
-        var followingList = await _cache.GetFollowing(
-            _proto,
-            _proto.Session.Did,
-            cancellationToken
-        );
-        var followersList = await _cache.GetFollowers(
-            _proto,
-            _proto.Session.Did,
-            cancellationToken
-        );
+        var followingList = await cache.GetFollowing(proto, proto.Session.Did, cancellationToken);
+        var followersList = await cache.GetFollowers(proto, proto.Session.Did, cancellationToken);
 
         // For some reason the comparer isn't working so do this the hard way
         return followingList
@@ -143,6 +113,7 @@ public class TimelineMinusList : IFeed
 
     private PostJudgement JudgePost(
         FeedViewPost fvp,
+        TimelineMinusListFeedConfig feedConfig,
         IEnumerable<ATDid> followingDids,
         IEnumerable<ATDid> mutualsDids,
         IEnumerable<ATDid> listMemberDids
@@ -152,7 +123,7 @@ public class TimelineMinusList : IFeed
         bool isMutual(ATDid? did) => did != null && mutualsDids.Contains(did, _atDidComparer);
         bool isInList(ATDid? did) => did != null && listMemberDids.Contains(did, _atDidComparer);
         bool isMuted(ATDid? did) =>
-            did != null && (_feedConfig.MuteUsers?.Contains(did.Handler) ?? false);
+            did != null && (feedConfig.MuteUsers?.Contains(did.Handler) ?? false);
 
         // A user is visible if: we are following them, and they are: not in the list | a mutual | always shown
         // This check should only be used in cases where we care if we're following the person
@@ -162,14 +133,11 @@ public class TimelineMinusList : IFeed
             && (
                 !isInList(did)
                 || isMutual(did)
-                || (_feedConfig.AlwaysShowListUser?.Contains(did.Handler) ?? true)
+                || (feedConfig.AlwaysShowListUser?.Contains(did.Handler) ?? true)
             );
 
         // Self post
-        if (
-            _feedConfig.ShowSelfPosts
-            && fvp.Post.Author.Did.Handler == _proto.Session?.Did?.Handler
-        )
+        if (feedConfig.ShowSelfPosts && fvp.Post.Author.Did.Handler == proto.Session?.Did?.Handler)
         {
             return new PostJudgement(PostType.SelfPost, true);
         }
@@ -179,11 +147,11 @@ public class TimelineMinusList : IFeed
         {
             // TODO: Add SkeletonReasonRepost to the PostJudgement - we need the orig URI which getTimeline doesn't seem to provide
             // Without the reason, they appear out of nowhere and are kinda confusing
-            /*if (_feedConfig.ShowReposts == ShowRepostsSetting.All)
+            /*if (feedConfig.ShowReposts == ShowRepostsSetting.All)
             {
                 return new PostJudgement(PostType.Repost, true);
             }
-            else if (_feedConfig.ShowReposts == ShowRepostsSetting.FollowingOnly)
+            else if (feedConfig.ShowReposts == ShowRepostsSetting.FollowingOnly)
             {
                 if (isVisible(fvp.Post.Author.Did))
                 {
@@ -202,19 +170,19 @@ public class TimelineMinusList : IFeed
                 return new PostJudgement(PostType.ContextDeleted, false);
             }
 
-            if (_feedConfig.ShowReplies == ShowRepliesSetting.All)
+            if (feedConfig.ShowReplies == ShowRepliesSetting.All)
             {
                 return new PostJudgement(PostType.Reply, true);
             }
             else if (
-                _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly
-                || _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
+                feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnly
+                || feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
             )
             {
                 if (
                     isVisible(fvp.Reply?.Parent?.Author.Did)
                     && (
-                        _feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
+                        feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
                         || isVisible(fvp.Reply?.Root?.Author.Did)
                     )
                 )
@@ -233,11 +201,11 @@ public class TimelineMinusList : IFeed
         // Quote post
         if (fvp.Post.Embed is RecordViewEmbed re)
         {
-            if (_feedConfig.ShowQuotePosts == ShowQuotePostsSetting.All)
+            if (feedConfig.ShowQuotePosts == ShowQuotePostsSetting.All)
             {
                 return new PostJudgement(PostType.QuotePost, true);
             }
-            else if (_feedConfig.ShowQuotePosts == ShowQuotePostsSetting.FollowingOnly)
+            else if (feedConfig.ShowQuotePosts == ShowQuotePostsSetting.FollowingOnly)
             {
                 if (isVisible(re.Record.Author.Did))
                 {
@@ -251,11 +219,11 @@ public class TimelineMinusList : IFeed
         // Target list
         if (isInList(fvp.Post.Author.Did))
         {
-            if (_feedConfig.AlwaysShowListUser?.Contains(fvp.Post.Author.Did.Handler) ?? false)
+            if (feedConfig.AlwaysShowListUser?.Contains(fvp.Post.Author.Did.Handler) ?? false)
             {
                 return new PostJudgement(PostType.InListAlwaysShow, !isMuted(fvp.Post.Author.Did));
             }
-            else if (_feedConfig.IncludeListMutuals && isMutual(fvp.Post.Author.Did))
+            else if (feedConfig.IncludeListMutuals && isMutual(fvp.Post.Author.Did))
             {
                 return new PostJudgement(PostType.InListMutual, !isMuted(fvp.Post.Author.Did));
             }
