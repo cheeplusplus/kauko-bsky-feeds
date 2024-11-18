@@ -15,7 +15,10 @@ public class FeedDbContext(DbContextOptions<FeedDbContext> options) : DbContext(
     // special "local" folder for your platform.
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {
-        options.UseSqlite($"Data Source={DbPath}");
+        if (!options.IsConfigured)
+        {
+            options.UseSqlite($"Data Source={DbPath}");
+        }
         options.AddInterceptors(new PostUpsertInterceptor());
     }
 

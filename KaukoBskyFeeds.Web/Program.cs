@@ -4,19 +4,23 @@ using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Bleh: we may need to step up a directory to find the config file
 var bskyConfigFilename = "bsky.config.json";
-var bskyConfigPath = Path.Join(Directory.GetCurrentDirectory(), bskyConfigFilename);
+var dataDir = Directory.GetCurrentDirectory();
+var bskyConfigPath = Path.Join(dataDir, bskyConfigFilename);
 if (!File.Exists(bskyConfigPath))
 {
     // Move up
-    var upOne = Path.Join(Directory.GetCurrentDirectory(), "..", bskyConfigFilename);
-    if (File.Exists(upOne))
+    var upOneDir = Path.Join(dataDir, "..");
+    var upOneCfg = Path.Join(upOneDir, bskyConfigFilename);
+    if (File.Exists(upOneCfg))
     {
-        bskyConfigPath = upOne;
+        dataDir = upOneDir;
+        bskyConfigPath = upOneCfg;
     }
     else
     {
@@ -31,7 +35,11 @@ builder.Services.Configure<JsonOptions>(options =>
         | System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
 );
 
-builder.Services.AddDbContext<FeedDbContext>();
+builder.Services.AddDbContext<FeedDbContext>(options =>
+{
+    var dbPath = Path.Join(dataDir, "jetstream.db");
+    options.UseSqlite($"Data Source={dbPath}");
+});
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton(f =>
 {

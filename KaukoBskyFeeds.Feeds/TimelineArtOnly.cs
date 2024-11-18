@@ -30,7 +30,6 @@ public class TimelineArtOnly(
         CancellationToken cancellationToken = default
     )
     {
-        logger.LogDebug("Fetching timeline");
         var listMemberDids = await cache.GetListMembers(
             proto,
             new ATUri(feedConfig.ListUri),
