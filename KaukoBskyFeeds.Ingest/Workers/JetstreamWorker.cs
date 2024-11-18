@@ -123,43 +123,26 @@ public class JetstreamWorker : IHostedService
             return;
         }
 
-        // Try and fetch the post first because augh
-        var storedPost = _db.Posts.Local.SingleOrDefault(s =>
-            s.Did == message.Did && s.Rkey == message.Commit.RecordKey
-        );
-
         if (message.Commit.Operation == JetstreamOperation.Create)
         {
-            if (storedPost == null)
+            var post = message.ToDbPost();
+            if (post != null)
             {
-                var post = message.ToDbPost();
-                if (post != null)
+                try
                 {
-                    try
-                    {
-                        _db.Posts.Add(post);
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // Just ignore dupes, not sure why they happen but they do
-                    }
+                    _db.Posts.Add(post);
                 }
-            }
-            else
-            {
-                _logger.LogTrace("Saw duplicate post {postUri}", storedPost.ToUri());
+                catch (InvalidOperationException)
+                {
+                    // Just ignore dupes, not sure why they happen but they do
+                }
             }
         }
         else if (message.Commit.Operation == JetstreamOperation.Delete)
         {
-            if (storedPost != null)
-            {
-                _db.Posts.Remove(storedPost);
-            }
-            else
-            {
-                _logger.LogTrace("Tried to delete post we don't have {postUri}", message.ToAtUri());
-            }
+            await _db
+                .Posts.Where(w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey)
+                .ExecuteDeleteAsync(cancellationToken);
         }
         else
         {
@@ -203,31 +186,8 @@ public class JetstreamWorker : IHostedService
 
     private async Task CommitDb(CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var count = await _db.SaveChangesAsync(cancellationToken);
-            _db.ChangeTracker.Clear();
-            _logger.LogDebug("Committed {count} changes to disk", count);
-        }
-        catch (DbUpdateException due)
-        {
-            // This is a sucky way to do this, but we essentially don't care about changes so we'll just drop them
-            // We should and should support upserts but all the upsert libraries break with JSON columns right now
-            if (due.InnerException is SqliteException ie)
-            {
-                if (ie.SqliteExtendedErrorCode == 1555)
-                {
-                    foreach (var fe in due.Entries.Where(w => w.State == EntityState.Added))
-                    {
-                        _logger.LogWarning("Got duplicate entry, detatching");
-                        fe.State = EntityState.Detached; // detatch it
-                    }
-                    await _db.SaveChangesAsync(cancellationToken);
-                    _db.ChangeTracker.Clear();
-                    return;
-                }
-            }
-            throw;
-        }
+        var count = await _db.SaveChangesAsync(cancellationToken);
+        _db.ChangeTracker.Clear();
+        _logger.LogDebug("Committed {count} changes to disk", count);
     }
 }
