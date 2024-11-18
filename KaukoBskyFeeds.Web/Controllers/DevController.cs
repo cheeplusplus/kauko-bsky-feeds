@@ -123,8 +123,6 @@ public class DevController(
     {
         if (_session == null || !proto.IsAuthenticated)
         {
-            logger.LogInformation("Logging in");
-
             _session =
                 proto.Session
                 ?? await proto.AuthenticateWithPasswordAsync(

@@ -50,10 +50,6 @@ public class XrpcController(
 
         // Attempt login on first fetch
         await EnsureLogin(cancellationToken);
-        if (_session == null)
-        {
-            throw new Exception("Not logged in!");
-        }
 
         logger.LogInformation(
             "Fetching feed {feed} with limit {limit} at cursor {cursor} from {requestor}",
@@ -93,8 +89,6 @@ public class XrpcController(
     {
         if (_session == null || !proto.IsAuthenticated)
         {
-            logger.LogInformation("Logging in");
-
             _session =
                 proto.Session
                 ?? await proto.AuthenticateWithPasswordAsync(
