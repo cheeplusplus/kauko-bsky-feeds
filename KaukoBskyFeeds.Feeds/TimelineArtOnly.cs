@@ -6,13 +6,11 @@ using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Feeds;
 
 [BskyFeed(nameof(TimelineArtOnly), typeof(TimelineArtOnlyFeedConfig))]
 public class TimelineArtOnly(
-    ILogger<TimelineArtOnly> logger,
     ATProtocol proto,
     TimelineArtOnlyFeedConfig feedConfig,
     FeedDbContext db,
@@ -54,7 +52,7 @@ public class TimelineArtOnly(
                 && w.Embeds.Images != null
                 && w.Embeds.Images.Count > 0
                 && w.ReplyParentUri == null // TODO: allow self-replies by comparing the DID with the post's
-                && (cursorAsDate == default || w.EventTime > cursorAsDate)
+                && (cursorAsDate == default || w.EventTime < cursorAsDate)
             )
             .OrderByDescending(o => o.EventTime)
             .Take(limit ?? 50)
