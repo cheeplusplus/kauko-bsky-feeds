@@ -1,4 +1,5 @@
 using FishyFlip;
+using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
@@ -30,6 +31,7 @@ builder.Services.Configure<JsonOptions>(options =>
         | System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
 );
 
+builder.Services.AddDbContext<FeedDbContext>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton(f =>
 {

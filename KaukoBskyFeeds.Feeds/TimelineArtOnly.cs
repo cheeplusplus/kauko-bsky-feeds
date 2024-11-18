@@ -2,57 +2,38 @@ using FishyFlip;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
+using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared.Bsky;
+using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Feeds;
 
-public class TimelineArtOnly : IFeed
+[BskyFeed(nameof(TimelineArtOnly), typeof(TimelineArtOnlyFeedConfig))]
+public class TimelineArtOnly(
+    ILogger<TimelineArtOnly> logger,
+    ATProtocol proto,
+    TimelineArtOnlyFeedConfig feedConfig,
+    FeedDbContext db,
+    IBskyCache cache
+) : IFeed
 {
-    private readonly ILogger<TimelineArtOnly> _logger;
-    private readonly ATProtocol _proto;
-    private readonly TimelineArtOnlyFeedConfig _feedConfig;
-    private readonly FeedDbContext _db;
-    private readonly IBskyCache _cache;
+    public string DisplayName => feedConfig.DisplayName;
 
-    public TimelineArtOnly(
-        ILogger<TimelineArtOnly> logger,
-        ATProtocol proto,
-        TimelineArtOnlyFeedConfig feedConfig,
-        FeedDbContext db,
-        IBskyCache cache
-    )
-    {
-        _logger = logger;
-        _proto = proto;
-        _feedConfig = feedConfig;
-        _db = db;
-        _cache = cache;
-        DisplayName = feedConfig.DisplayName;
-        Description = feedConfig.Description;
-    }
+    public string Description => feedConfig.Description;
 
-    public string DisplayName { get; init; }
-
-    public string Description { get; init; }
-
-    public async Task<SkeletonFeed> GetFeedSkeleton(
+    public async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
         int? limit,
         string? cursor,
         CancellationToken cancellationToken = default
     )
     {
-        _logger.LogDebug("Fetching timeline");
-        if (_proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
-
-        var listMemberDids = await _cache.GetListMembers(
-            _proto,
-            new ATUri(_feedConfig.ListUri),
+        logger.LogDebug("Fetching timeline");
+        var listMemberDids = await cache.GetListMembers(
+            proto,
+            new ATUri(feedConfig.ListUri),
             cancellationToken
         );
 
@@ -65,9 +46,11 @@ public class TimelineArtOnly : IFeed
             out var cursorAsDate
         );
 
-        var posts = await _db
-            .Posts.Where(w =>
-                listMemberDids.Contains(new ATDid(w.Did), new ATDidComparer())
+        var feedDids = listMemberDids.Select(s => s.Handler);
+        var posts = await db
+            .Posts.OrderByDescending(o => o.EventTime)
+            .Where(w =>
+                feedDids.Contains(w.Did)
                 && w.Embeds != null
                 && w.Embeds.Images != null
                 && w.Embeds.Images.Count > 0
@@ -77,9 +60,9 @@ public class TimelineArtOnly : IFeed
             .OrderByDescending(o => o.EventTime)
             .Take(limit ?? 50)
             .ToListAsync(cancellationToken);
-        var filteredFeed = posts.Select(s => new SkeletonFeedPost(s.ToUri(), null));
+        var filteredFeed = posts.Select(s => new CustomSkeletonFeedPost(s.ToUri(), null));
         var newCursor = posts.FirstOrDefault()?.EventTime.ToString("o");
 
-        return new SkeletonFeed(filteredFeed.ToArray(), newCursor);
+        return new CustomSkeletonFeed(filteredFeed.ToList(), newCursor);
     }
 }
