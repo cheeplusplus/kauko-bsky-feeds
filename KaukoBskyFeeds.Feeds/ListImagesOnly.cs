@@ -3,23 +3,23 @@ using FishyFlip.Models;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
+using KaukoBskyFeeds.Feeds.Utils;
+using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace KaukoBskyFeeds.Feeds;
 
-[BskyFeed(nameof(TimelineArtOnly), typeof(TimelineArtOnlyFeedConfig))]
-public class TimelineArtOnly(
+[BskyFeed(nameof(ListImagesOnly), typeof(ListImagesOnlyFeedConfig))]
+public class ListImagesOnly(
     ATProtocol proto,
-    TimelineArtOnlyFeedConfig feedConfig,
+    ListImagesOnlyFeedConfig feedConfig,
     FeedDbContext db,
     IBskyCache cache
 ) : IFeed
 {
-    public string DisplayName => feedConfig.DisplayName;
-
-    public string Description => feedConfig.Description;
+    public BaseFeedConfig Config => feedConfig;
 
     public async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
@@ -33,32 +33,21 @@ public class TimelineArtOnly(
             new ATUri(feedConfig.ListUri),
             cancellationToken
         );
-
-        // While it's supposed to be opaque, the Bsky timeline cursor is an ISO-8601 string
-        // Obeying this lets it walk backwards
-        DateTime.TryParse(
-            cursor,
-            null,
-            System.Globalization.DateTimeStyles.RoundtripKind,
-            out var cursorAsDate
-        );
-
         var feedDids = listMemberDids.Select(s => s.Handler);
+
         var posts = await db
-            .Posts.OrderByDescending(o => o.EventTime)
+            .Posts.LatestFromCursor(cursor)
             .Where(w =>
                 feedDids.Contains(w.Did)
                 && w.Embeds != null
                 && w.Embeds.Images != null
                 && w.Embeds.Images.Count > 0
-                && w.ReplyParentUri == null // TODO: allow self-replies by comparing the DID with the post's
-                && (cursorAsDate == default || w.EventTime < cursorAsDate)
+                && (w.ReplyParentUri == null || w.ReplyParentUri.StartsWith("at://" + w.Did))
             )
-            .OrderByDescending(o => o.EventTime)
             .Take(limit ?? 50)
             .ToListAsync(cancellationToken);
-        var filteredFeed = posts.Select(s => new CustomSkeletonFeedPost(s.ToUri(), null));
-        var newCursor = posts.FirstOrDefault()?.EventTime.ToString("o");
+        var filteredFeed = posts.Select(s => new CustomSkeletonFeedPost(s.ToUri()));
+        var newCursor = posts.LastOrDefault()?.GetCursor();
 
         return new CustomSkeletonFeed(filteredFeed.ToList(), newCursor);
     }

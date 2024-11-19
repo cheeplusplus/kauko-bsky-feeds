@@ -50,6 +50,16 @@ public class XrpcController(
 
         // Attempt login on first fetch
         await EnsureLogin(cancellationToken);
+        if (_session == null)
+        {
+            throw new Exception("Not logged in!");
+        }
+
+        // Handle feed owner restriction
+        if (feedInstance.Config.RestrictToFeedOwner && requestingDid != _session?.Did)
+        {
+            return TypedResults.Unauthorized();
+        }
 
         logger.LogInformation(
             "Fetching feed {feed} with limit {limit} at cursor {cursor} from {requestor}",

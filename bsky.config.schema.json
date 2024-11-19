@@ -59,6 +59,10 @@
                                     "Description": {
                                         "description": "Published list description",
                                         "type": "string"
+                                    },
+                                    "RestrictToFeedOwner": {
+                                        "description": "Restrict to the feed owner?",
+                                        "type": "boolean"
                                     }
                                 },
                                 "required": [
@@ -76,7 +80,7 @@
                                 "$ref": "#/definitions/FeedProcessorTimelineMinusList"
                             },
                             {
-                                "$ref": "#/definitions/FeedProcessorTimelineArtOnly"
+                                "$ref": "#/definitions/FeedProcessorListImagesOnly"
                             }
                         ]
                     },
@@ -137,11 +141,6 @@
                                 "$ref": "#/definitions/didDocument"
                             }
                         },
-                        "RestrictToFeedOwner": {
-                            "description": "Restrict to the feed owner?",
-                            "type": "boolean",
-                            "default": true
-                        },
                         "ShowSelfPosts": {
                             "description": "Show self posts?",
                             "type": "boolean",
@@ -191,12 +190,12 @@
                 }
             }
         },
-        "FeedProcessorTimelineArtOnly": {
+        "FeedProcessorListImagesOnly": {
             "type": "object",
             "properties": {
                 "Type": {
                     "type": "string",
-                    "const": "TimelineArtOnly"
+                    "const": "ListImagesOnly"
                 },
                 "Config": {
                     "type": "object",

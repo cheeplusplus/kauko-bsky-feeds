@@ -17,4 +17,8 @@ public record BskyConfigIdentity(string Hostname, string PublishedAtUri)
 
 public record BskyConfigFeedProcessor(string Type, BaseFeedConfig Config);
 
-public record BaseFeedConfig(string DisplayName, string Description);
+public record BaseFeedConfig(
+    string DisplayName,
+    string Description,
+    bool RestrictToFeedOwner = false
+);

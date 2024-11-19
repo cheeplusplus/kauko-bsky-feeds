@@ -60,6 +60,11 @@ public class DevController(
             cancellationToken
         );
         var feedsInSize = feedSkel.Feed.Take(25).Select(s => new ATUri(s.Post));
+        if (!feedsInSize.Any())
+        {
+            return TypedResults.NotFound();
+        }
+
         var hydratedRes = await proto.Feed.GetPostsAsync(feedsInSize, cancellationToken);
         var hydrated = hydratedRes.HandleResult();
 

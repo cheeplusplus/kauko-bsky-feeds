@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.WebSockets;
 using System.Text.Json;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
@@ -57,9 +58,18 @@ public class JetstreamConsumerWSC : BaseJetstreamConsumer
                 info.CloseStatusDescription
             );
 
-            // Update the cursor URI so we restart at the right point
-            _wsClient.Url = GetWsUri(getCursor: getCursor, wantedCollections: wantedCollections);
-            _logger.LogDebug("Switching Jetstream URI to {uri}", _wsClient.Url);
+            // Update the cursor URI so we restart at the right point, as long as we didn't intentionally disconnect
+            if (
+                info.Type != DisconnectionType.ByUser
+                && info.CloseStatus != WebSocketCloseStatus.NormalClosure
+            )
+            {
+                _wsClient.Url = GetWsUri(
+                    getCursor: getCursor,
+                    wantedCollections: wantedCollections
+                );
+                _logger.LogDebug("Switching Jetstream URI to {uri}", _wsClient.Url);
+            }
         });
         _wsClient.MessageReceived.Subscribe(OnMessageReceived);
 

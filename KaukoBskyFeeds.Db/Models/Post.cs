@@ -30,11 +30,6 @@ public class Post
     public string? ReplyParentUri { get; set; }
     public string? ReplyRootUri { get; set; }
     public PostEmbeds? Embeds { get; set; }
-
-    public string ToUri()
-    {
-        return $"at://{Did}/app.bsky.feed.post/{Rkey}";
-    }
 }
 
 public class PostEmbeds

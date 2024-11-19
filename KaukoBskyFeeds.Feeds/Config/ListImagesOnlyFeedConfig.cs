@@ -2,7 +2,7 @@ using KaukoBskyFeeds.Shared;
 
 namespace KaukoBskyFeeds.Feeds.Config;
 
-public record TimelineArtOnlyFeedConfig(
+public record ListImagesOnlyFeedConfig(
     string DisplayName,
     string Description,
     string ListUri,
