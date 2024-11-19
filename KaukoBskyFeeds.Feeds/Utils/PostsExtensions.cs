@@ -40,7 +40,12 @@ public static class PostExtensions
 
     public static string GetCursor(this Post post)
     {
-        return post.EventTime.ToString("o", CultureInfo.InvariantCulture);
+        return AsCursor(post.EventTime);
+    }
+
+    public static string AsCursor(this DateTime dt)
+    {
+        return dt.ToString("o", CultureInfo.InvariantCulture);
     }
 
     public static string ToUri(this Post post)

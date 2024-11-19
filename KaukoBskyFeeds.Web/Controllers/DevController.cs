@@ -59,15 +59,16 @@ public class DevController(
             cursor,
             cancellationToken
         );
+
         var feedsInSize = feedSkel.Feed.Take(25).Select(s => new ATUri(s.Post));
         if (!feedsInSize.Any())
         {
             return TypedResults.NotFound();
         }
-
         var hydratedRes = await proto.Feed.GetPostsAsync(feedsInSize, cancellationToken);
         var hydrated = hydratedRes.HandleResult();
 
+        Response.Headers.Append("X-Bsky-Cursor", feedSkel.Cursor);
         return TypedResults.Json(hydrated, proto.Options.JsonSerializerOptions);
     }
 

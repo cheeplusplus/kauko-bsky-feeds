@@ -56,7 +56,7 @@ public class TimelineMinusList(
             .Posts.LatestFromCursor(cursor)
             .Where(w => followingListStr.Contains(w.Did))
             // use a large limit - assume we need to fetch more than we're going to show
-            .Take(limit ?? 100)
+            .Take(100)
             .ToListAsync(cancellationToken);
         if (posts == null || posts.Count < 1 || cancellationToken.IsCancellationRequested)
         {
@@ -84,24 +84,25 @@ public class TimelineMinusList(
                 judgement = new PostJudgement(PostType.ErrorState, false);
             }
 
-            return new { Judgement = judgement, PostUri = s.ToUri() };
+            return new
+            {
+                Judgement = judgement,
+                PostUri = s.ToUri(),
+                Cursor = s.EventTime,
+            };
         });
 
-        var filteredFeed = judgedFeed
-            .Where(w => w.Judgement.ShouldShow)
+        var filteredFeed = judgedFeed.Where(w => w.Judgement.ShouldShow).Take(limit ?? 50);
+        var newCursor = filteredFeed.LastOrDefault()?.Cursor.AsCursor();
+        var feedOutput = filteredFeed
             .Select(s => new CustomSkeletonFeedPost(
                 s.PostUri,
                 s.Judgement.RepostReason,
                 $"Reason: {s.Judgement.Type}"
-            ));
+            ))
+            .ToList();
 
-        if (limit.HasValue)
-        {
-            // cap at requested limit
-            filteredFeed = filteredFeed.TakeLast(limit.Value);
-        }
-
-        return new CustomSkeletonFeed(filteredFeed.ToList(), posts.Last().GetCursor());
+        return new CustomSkeletonFeed(feedOutput, newCursor);
     }
 
     private async Task<IEnumerable<ATDid>> GetMutuals(CancellationToken cancellationToken = default)
