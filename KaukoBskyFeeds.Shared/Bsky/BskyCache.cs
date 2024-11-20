@@ -23,6 +23,11 @@ public interface IBskyCache
         ATUri listUri,
         CancellationToken cancellationToken = default
     );
+    Task<FeedProfile?> GetProfile(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCache
@@ -147,5 +152,29 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCac
                     return listMemberDids;
                 }
             ) ?? [];
+    }
+
+    public async Task<FeedProfile?> GetProfile(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (proto?.Session == null)
+        {
+            throw new NotLoggedInException();
+        }
+
+        return await _cache.GetOrCreateAsync(
+            $"user_{user}_profile",
+            async (cacheEntry) =>
+            {
+                cacheEntry.AbsoluteExpirationRelativeToNow = CACHE_DURATION;
+
+                _logger.LogDebug("Fetching user {user} profile", user);
+                var profileRes = await proto.Actor.GetProfileAsync(user, cancellationToken);
+                return profileRes.HandleResult();
+            }
+        );
     }
 }
