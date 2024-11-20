@@ -14,13 +14,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="data\zstd_dictionary">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
+    <EmbeddedResource Include="data\zstd_dictionary" />
   </ItemGroup>
 
 </Project>
