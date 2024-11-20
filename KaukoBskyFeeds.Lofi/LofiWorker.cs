@@ -90,73 +90,15 @@ public class LofiWorker(
 
     private async Task HandlePost(string did, string rkey, AppBskyFeedPost post)
     {
+        // Do all the async work up front
         var profile = await cache.GetProfile(proto, ATDid.Create(did)!);
-        var displayName = profile?.DisplayName ?? "?";
-        var handle = profile?.Handle ?? did;
+        var replyProfile =
+            post.Reply != null
+                ? await cache.GetProfile(proto, new ATUri(post.Reply.Parent.Uri).Did!)
+                : null;
 
-        var now = post.CreatedAt.ToLocalTime().ToShortTimeString();
-
-        Console.WriteLine();
-
-        Console.ForegroundColor = ConsoleColor.DarkBlue;
-        Console.Write($"[{now}] ");
-        Console.ForegroundColor = ConsoleColor.Gray;
-        Console.Write($"{displayName} ");
-        Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.Write($"(@{handle}) ");
-
-        Console.ForegroundColor = ConsoleColor.Gray;
-        if (post.Reply != null)
-        {
-            Console.Write($"replied to ");
-
-            var replyParent = new ATUri(post.Reply.Parent.Uri);
-            var replyProfile = await cache.GetProfile(proto, replyParent.Did!);
-            var replyHandle = replyProfile?.Handle ?? replyParent.Did?.ToString() ?? "?";
-
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.Write($"@{replyHandle}");
-        }
-        else
-        {
-            Console.Write("posted");
-        }
-
-        Console.ForegroundColor = ConsoleColor.Gray;
-        Console.Write(": ");
-
-        Console.ForegroundColor = ConsoleColor.Blue;
-        Console.Write(TerminalURL("(web)", $"https://bsky.app/profile/{did}/post/{rkey}"));
-        Console.ForegroundColor = ConsoleColor.Gray;
-        Console.WriteLine();
-
-        if (string.IsNullOrWhiteSpace(post.Text))
-        {
-            Console.ForegroundColor = ConsoleColor.DarkRed;
-            Console.WriteLine("    (no text)");
-        }
-        else
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(post.Text);
-        }
-
-        if (post.Embed != null)
-        {
-            Console.ForegroundColor = ConsoleColor.DarkMagenta;
-            Console.Write("  Embeds: ");
-            Console.WriteLine(
-                JsonSerializer.Serialize(
-                    post.Embed,
-                    new JsonSerializerOptions
-                    {
-                        DefaultIgnoreCondition =
-                            JsonIgnoreCondition.WhenWritingDefault
-                            | JsonIgnoreCondition.WhenWritingNull,
-                    }
-                )
-            );
-        }
+        var report = new LofiReport(did, rkey, post, profile, replyProfile);
+        report.Print();
     }
 
     private async Task EnsureLogin(CancellationToken cancellationToken = default)
@@ -176,4 +118,84 @@ public class LofiWorker(
 
     private static string TerminalURL(string caption, string url) =>
         $"\u001B]8;;{url}\a{caption}\u001B]8;;\a";
+
+    private record LofiReport(
+        string Did,
+        string Rkey,
+        AppBskyFeedPost Post,
+        FeedProfile? Profile,
+        FeedProfile? ReplyToProfile
+    )
+    {
+        public void Print()
+        {
+            var displayName = Profile?.DisplayName ?? "?";
+            var handle = Profile?.Handle ?? Did;
+
+            var now = Post.CreatedAt.ToLocalTime().ToShortTimeString();
+
+            Console.WriteLine();
+
+            Console.ForegroundColor = ConsoleColor.DarkBlue;
+            Console.Write($"[{now}] ");
+            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.Write($"{displayName} ");
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.Write($"(@{handle}) ");
+
+            Console.ForegroundColor = ConsoleColor.Gray;
+            if (Post.Reply != null)
+            {
+                Console.Write($"replied to ");
+
+                var replyHandle =
+                    ReplyToProfile?.Handle
+                    ?? new ATUri(Post.Reply.Parent.Uri).Did?.ToString()
+                    ?? "?";
+
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write($"@{replyHandle}");
+            }
+            else
+            {
+                Console.Write("posted");
+            }
+
+            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.Write(": ");
+
+            Console.ForegroundColor = ConsoleColor.Blue;
+            Console.Write(TerminalURL("(web)", $"https://bsky.app/profile/{Did}/post/{Rkey}"));
+            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.WriteLine();
+
+            if (string.IsNullOrWhiteSpace(Post.Text))
+            {
+                Console.ForegroundColor = ConsoleColor.DarkRed;
+                Console.WriteLine("    (no text)");
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine(Post.Text);
+            }
+
+            if (Post.Embed != null)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkMagenta;
+                Console.Write("  Embeds: ");
+                Console.WriteLine(
+                    JsonSerializer.Serialize(
+                        Post.Embed,
+                        new JsonSerializerOptions
+                        {
+                            DefaultIgnoreCondition =
+                                JsonIgnoreCondition.WhenWritingDefault
+                                | JsonIgnoreCondition.WhenWritingNull,
+                        }
+                    )
+                );
+            }
+        }
+    };
 }
