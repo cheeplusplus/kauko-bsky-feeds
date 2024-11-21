@@ -53,7 +53,12 @@ public static class PostExtensions
         return $"at://{post.Did}/{BskyConstants.COLLECTION_TYPE_POST}/{post.Rkey}";
     }
 
-    public static ATDid GetPosterDid(this Post post)
+    public static ATUri ToAtUri(this Post post)
+    {
+        return ATUri.Create(ToUri(post));
+    }
+
+    public static ATDid GetAuthorDid(this Post post)
     {
         return ATDid.Create(post.Did) ?? throw new Exception("Failed to convert DID from Post");
     }

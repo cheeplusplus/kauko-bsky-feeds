@@ -24,4 +24,4 @@ For example, to publish for Linux:
 dotnet publish --os linux --arch x64 -p:PublishSingleFile=true --self-contained KaukoBskyFeeds.Lofi
 ```
 
-Output is at `./KaukoBskyFeeds.Lofi/bin/Release/net8.0/linux-x64/publish/KaukoBskyFeeds.Lofi`
+Output is at `./KaukoBskyFeeds.Lofi/bin/Release/net9.0/linux-x64/publish/KaukoBskyFeeds.Lofi`

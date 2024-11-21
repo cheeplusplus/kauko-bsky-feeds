@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>KaukoBskyFeeds.Web</RootNamespace>
@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FishyFlip" Version="2.0.0" />
+    <PackageReference Include="FishyFlip" Version="2.1.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
     <ProjectReference Include="..\KaukoBskyFeeds.Feeds\KaukoBskyFeeds.Feeds.csproj" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Redis\KaukoBskyFeeds.Redis.csproj" />
   </ItemGroup>
 
 </Project>

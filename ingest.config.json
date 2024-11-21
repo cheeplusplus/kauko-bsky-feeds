@@ -1,4 +1,7 @@
 {
+    "ConnectionStrings": {
+        "Redis": "localhost"
+    },
     "IngestConfig": {
         "Verbose": true,
         "ConsumeHistoricFeed": true

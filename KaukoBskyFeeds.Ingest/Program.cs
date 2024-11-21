@@ -1,6 +1,7 @@
 ﻿using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Workers;
+using KaukoBskyFeeds.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -18,6 +19,7 @@ builder.Services.AddDbContext<FeedDbContext>(
         db.ConfigureWarnings(b => b.Log((RelationalEventId.CommandExecuted, LogLevel.Trace)));
     }
 );
+builder.Services.AddBskyRedis(builder.Configuration.GetConnectionString("Redis"));
 
 // builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();

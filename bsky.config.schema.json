@@ -81,6 +81,9 @@
                             },
                             {
                                 "$ref": "#/definitions/FeedProcessorListImagesOnly"
+                            },
+                            {
+                                "$ref": "#/definitions/FeedProcessorBestArt"
                             }
                         ]
                     },
@@ -208,6 +211,28 @@
                     "required": [
                         "ListUri"
                     ]
+                }
+            }
+        },
+        "FeedProcessorBestArt": {
+            "type": "object",
+            "properties": {
+                "Type": {
+                    "type": "string",
+                    "const": "BestArt"
+                },
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "BalanceInteractions": {
+                            "description": "Balance interactions to follower count?",
+                            "type": "boolean"
+                        },
+                        "RestrictToListUri": {
+                            "description": "Optional list URI used for filtering",
+                            "$ref": "#/definitions/atUriForList"
+                        }
+                    }
                 }
             }
         }

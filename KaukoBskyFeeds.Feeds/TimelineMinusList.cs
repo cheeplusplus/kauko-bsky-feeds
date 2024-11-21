@@ -151,7 +151,7 @@ public class TimelineMinusList(
                 || (feedConfig.AlwaysShowListUser?.Contains(did.Handler) ?? true)
             );
 
-        var postAuthor = post.GetPosterDid();
+        var postAuthor = post.GetAuthorDid();
 
         // Self post
         if (feedConfig.ShowSelfPosts && _atDidComparer.Equals(postAuthor, requestorDid))

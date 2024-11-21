@@ -26,7 +26,9 @@ public class DevController(
     private Session? _session;
 
     [HttpGet("previewFeed")]
-    public async Task<Results<NotFound, JsonHttpResult<PostCollection>>> GetHydratedFeed(
+    public async Task<
+        Results<NotFound, Ok<string>, JsonHttpResult<PostCollection>>
+    > GetHydratedFeed(
         [FromServices] IServiceProvider sp,
         string feed,
         int? limit = null,
@@ -53,6 +55,13 @@ public class DevController(
             throw new Exception("Not logged in!");
         }
 
+        logger.LogInformation(
+            "Fetching feed {feed} with limit {limit} at cursor {cursor}",
+            feed,
+            limit,
+            cursor
+        );
+
         var feedSkel = await feedInstance.GetFeedSkeleton(
             _session.Did,
             limit,
@@ -63,7 +72,7 @@ public class DevController(
         var feedsInSize = feedSkel.Feed.Take(25).Select(s => new ATUri(s.Post));
         if (!feedsInSize.Any())
         {
-            return TypedResults.NotFound();
+            return TypedResults.Ok("Feed is empty.");
         }
         var hydratedRes = await proto.Feed.GetPostsAsync(feedsInSize, cancellationToken);
         var hydrated = hydratedRes.HandleResult();

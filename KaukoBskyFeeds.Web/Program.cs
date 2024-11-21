@@ -1,6 +1,8 @@
 using FishyFlip;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Registry;
+using KaukoBskyFeeds.Redis;
+using KaukoBskyFeeds.Redis.FastStore;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.AspNetCore.Http.Json;
@@ -40,13 +42,12 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
     var dbPath = Path.Join(dataDir, "jetstream.db");
     options.UseSqlite($"Data Source={dbPath}");
 });
-builder.Services.AddMemoryCache();
+builder.Services.AddBskyRedis(builder.Configuration.GetConnectionString("Redis"));
 builder.Services.AddSingleton(f =>
 {
     var logger = f.GetService<ILogger<ATProtocol>>();
     return new ATProtocolBuilder().EnableAutoRenewSession(true).WithLogger(logger).Build();
 });
-builder.Services.AddSingleton<IBskyCache, BskyCache>();
 builder.Services.AddSingleton<FeedRegistry>();
 
 builder.Services.AddControllers();

@@ -3,8 +3,9 @@ using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
+using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
+using KaukoBskyFeeds.Redis.FastStore;
 using KaukoBskyFeeds.Shared.Bsky;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -16,6 +17,7 @@ public class JetstreamWorker : IHostedService
 {
     private readonly ILogger<JetstreamWorker> _logger;
     private readonly FeedDbContext _db;
+    private readonly IFastStore _fastStore;
     private readonly IJetstreamConsumer _consumer;
     private readonly bool _consumeFromHistoricFeed = false;
     private readonly Channel<JetstreamMessage> _channel =
@@ -23,7 +25,6 @@ public class JetstreamWorker : IHostedService
     private readonly CancellationTokenSource _channelCancel = new();
     private Post? _cursorEvent;
     private DateTime _lastSave = DateTime.MinValue;
-    private int _lastSaveCount = 0;
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
 
@@ -31,12 +32,14 @@ public class JetstreamWorker : IHostedService
         ILogger<JetstreamWorker> logger,
         IConfiguration configuration,
         FeedDbContext db,
+        IFastStore fastStore,
         IJetstreamConsumer consumer
     )
     {
         _logger = logger;
         _consumeFromHistoricFeed = configuration.GetValue<bool>("IngestConfig:ConsumeHistoricFeed");
         _db = db;
+        _fastStore = fastStore;
         _consumer = consumer;
         _consumer.Message += (_, msg) => _channel.Writer.TryWrite(msg);
     }
@@ -78,11 +81,13 @@ public class JetstreamWorker : IHostedService
             }
         }
 
+        var offset = _cursorEvent.EventTimeUs - ((long)TimeSpan.FromSeconds(1).TotalMicroseconds);
         _logger.LogInformation(
-            "Events found, resuming stream from {lastEventTime}",
-            _cursorEvent.EventTimeUs
+            "Events found, resuming stream from {lastEventTime} ({offset})",
+            _cursorEvent.EventTimeUs,
+            offset
         );
-        return _cursorEvent.EventTimeUs;
+        return offset;
     }
 
     private async void ReadChannel(CancellationToken cancellationToken)
@@ -112,47 +117,13 @@ public class JetstreamWorker : IHostedService
         {
             await HandleMessage_Post(message, cancellationToken);
         }
-    }
-
-    private async Task HandleMessage_Post(
-        JetstreamMessage message,
-        CancellationToken cancellationToken
-    )
-    {
-        if (message.Commit?.Operation == null)
+        else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_LIKE)
         {
-            return;
+            await HandleMessage_Like(message, cancellationToken);
         }
-
-        if (message.Commit.Operation == JetstreamOperation.Create)
+        else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_REPOST)
         {
-            var post = message.ToDbPost();
-            if (post != null)
-            {
-                try
-                {
-                    _db.Posts.Add(post);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Just ignore dupes, not sure why they happen but they do
-                }
-            }
-        }
-        else if (message.Commit.Operation == JetstreamOperation.Delete)
-        {
-            await _db
-                .Posts.Where(w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey)
-                .ExecuteDeleteAsync(cancellationToken);
-        }
-        else
-        {
-            // TODO: Support updates
-            _logger.LogTrace(
-                "Unsupported message operation {op} on {postUri}",
-                message.Commit.Operation,
-                message.ToAtUri()
-            );
+            await HandleMessage_Repost(message, cancellationToken);
         }
 
         // Save every 10 seconds
@@ -188,6 +159,142 @@ public class JetstreamWorker : IHostedService
                 .ExecuteDeleteAsync(cancellationToken);
             _lastCleanup = DateTime.Now;
             _logger.LogInformation("Cleanup complete, {count} records pruned", count);
+        }
+    }
+
+    private async Task HandleMessage_Post(
+        JetstreamMessage message,
+        CancellationToken cancellationToken
+    )
+    {
+        if (message.Commit?.Operation == null)
+        {
+            return;
+        }
+        var messageAtUri = message.ToAtUri();
+
+        if (message.Commit.Operation == JetstreamOperation.Create)
+        {
+            var post = message.ToDbPost();
+            if (post != null)
+            {
+                try
+                {
+                    _db.Posts.Add(post);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Just ignore dupes, not sure why they happen but they do
+                }
+
+                if (post.ReplyParentUri != null)
+                {
+                    await _fastStore.AddReply(post.ReplyParentUri, messageAtUri);
+                }
+                if (post.Embeds?.RecordUri != null)
+                {
+                    await _fastStore.AddQuotePost(post.Embeds.RecordUri, messageAtUri);
+                }
+            }
+        }
+        else if (message.Commit.Operation == JetstreamOperation.Delete)
+        {
+            var deletedPost = await _db.Posts.SingleOrDefaultAsync(
+                w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey,
+                cancellationToken
+            );
+            if (deletedPost != null)
+            {
+                // Clean up
+                if (deletedPost.ReplyParentUri != null)
+                {
+                    await _fastStore.RemoveReply(deletedPost.ReplyParentUri, messageAtUri);
+                }
+                if (deletedPost.Embeds?.RecordUri != null)
+                {
+                    await _fastStore.RemoveQuotePost(deletedPost.Embeds.RecordUri, messageAtUri);
+                }
+                await _fastStore.DeleteTopLevelPost(messageAtUri);
+
+                _db.Posts.Remove(deletedPost);
+            }
+
+            /*await _db
+                .Posts.Where(w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey)
+                .ExecuteDeleteAsync(cancellationToken);*/
+        }
+        else
+        {
+            // TODO: Support updates
+            _logger.LogTrace(
+                "Unsupported message operation {op} on {postUri}",
+                message.Commit.Operation,
+                message.ToAtUri()
+            );
+        }
+    }
+
+    private async Task HandleMessage_Like(
+        JetstreamMessage message,
+        CancellationToken cancellationToken
+    )
+    {
+        if (
+            message.Commit?.Operation == null
+            || message.Commit.Record is not AppBskyFeedLike commitRecord
+        )
+        {
+            return;
+        }
+
+        if (message.Commit.Operation == JetstreamOperation.Create)
+        {
+            await _fastStore.AddLike(commitRecord.Subject.Uri, message.Did);
+        }
+        else if (message.Commit.Operation == JetstreamOperation.Delete)
+        {
+            await _fastStore.RemoveLike(commitRecord.Subject.Uri, message.Did);
+        }
+        else
+        {
+            // TODO: Support updates
+            _logger.LogTrace(
+                "Unsupported message operation {op} on {postUri}",
+                message.Commit.Operation,
+                message.ToAtUri()
+            );
+        }
+    }
+
+    private async Task HandleMessage_Repost(
+        JetstreamMessage message,
+        CancellationToken cancellationToken
+    )
+    {
+        if (
+            message.Commit?.Operation == null
+            || message.Commit.Record is not AppBskyFeedRepost commitRecord
+        )
+        {
+            return;
+        }
+
+        if (message.Commit.Operation == JetstreamOperation.Create)
+        {
+            await _fastStore.AddRepost(commitRecord.Subject.Uri, message.Did);
+        }
+        else if (message.Commit.Operation == JetstreamOperation.Delete)
+        {
+            await _fastStore.AddRepost(commitRecord.Subject.Uri, message.Did);
+        }
+        else
+        {
+            // TODO: Support updates
+            _logger.LogTrace(
+                "Unsupported message operation {op} on {postUri}",
+                message.Commit.Operation,
+                message.ToAtUri()
+            );
         }
     }
 
