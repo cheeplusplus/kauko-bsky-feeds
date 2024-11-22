@@ -22,12 +22,6 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
     public const string JETSTREAM_URL = "wss://jetstream1.us-west.bsky.network";
     public static readonly string[] DEFAULT_COLLECTIONS = [BskyConstants.COLLECTION_TYPE_POST];
 
-    public static readonly string ZSTD_DICTIONARY_PATH = Path.Join(
-        Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location),
-        "data",
-        "zstd_dictionary"
-    );
-
     public event EventHandler<JetstreamMessage>? Message;
     public long LastEventTime { get; protected set; }
     public abstract Task Start(
@@ -45,7 +39,13 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
     protected static Decompressor GetDecompressor()
     {
         var decompressor = new Decompressor();
-        var dict = File.ReadAllBytes(ZSTD_DICTIONARY_PATH);
+        var dictResource =
+            Assembly
+                .GetExecutingAssembly()
+                .GetManifestResourceStream("KaukoBskyFeeds.Ingest.Jetstream.data.zstd_dictionary")
+            ?? throw new Exception("Failed to find zstd dictionary in assembly!");
+        using var br = new BinaryReader(dictResource);
+        var dict = br.ReadBytes((int)dictResource.Length);
         decompressor.LoadDictionary(dict);
         return decompressor;
     }
@@ -79,11 +79,7 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
                 ? "?" + string.Join('&', querySegments.Select(s => $"{s.Key}={s.Value}"))
                 : null;
 
-        var jetstreamUri = new UriBuilder(hostUrl)
-        {
-            Path = "/subscribe",
-            Query = queryStr,
-        };
+        var jetstreamUri = new UriBuilder(hostUrl) { Path = "/subscribe", Query = queryStr };
 
         return jetstreamUri.Uri;
     }

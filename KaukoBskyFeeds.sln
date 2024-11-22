@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KaukoBskyFeeds.Db", "KaukoB
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KaukoBskyFeeds.Ingest.Jetstream", "KaukoBskyFeeds.Ingest.Jetstream\KaukoBskyFeeds.Ingest.Jetstream.csproj", "{B2ED5907-C73E-44EC-BDBE-FFC00DE7BA8E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KaukoBskyFeeds.Lofi", "KaukoBskyFeeds.Lofi\KaukoBskyFeeds.Lofi.csproj", "{969CF343-A65A-46CE-8BB9-6BC974144148}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{B2ED5907-C73E-44EC-BDBE-FFC00DE7BA8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B2ED5907-C73E-44EC-BDBE-FFC00DE7BA8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B2ED5907-C73E-44EC-BDBE-FFC00DE7BA8E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{969CF343-A65A-46CE-8BB9-6BC974144148}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{969CF343-A65A-46CE-8BB9-6BC974144148}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{969CF343-A65A-46CE-8BB9-6BC974144148}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{969CF343-A65A-46CE-8BB9-6BC974144148}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
