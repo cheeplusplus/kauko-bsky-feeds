@@ -1,10 +1,13 @@
 ﻿using FishyFlip;
 using KaukoBskyFeeds.Ingest.Jetstream;
+using KaukoBskyFeeds.Lofi;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
+Console.OutputEncoding = System.Text.Encoding.UTF8;
 
 var builder = Host.CreateApplicationBuilder(args);
 

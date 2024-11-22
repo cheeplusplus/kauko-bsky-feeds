@@ -1,8 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using FishyFlip;
 using FishyFlip.Models;
+using FishyFlip.Tools;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
@@ -12,6 +10,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+namespace KaukoBskyFeeds.Lofi;
+
 public class LofiWorker(
     ILogger<LofiWorker> logger,
     IConfiguration config,
@@ -20,11 +20,17 @@ public class LofiWorker(
     IJetstreamConsumer jsc
 ) : IHostedService
 {
-    private Session? _session;
-    private List<string>? _following;
-    private readonly BskyConfigAuth bskyAuthConfig =
+    private readonly BskyConfigAuth _bskyAuthConfig =
         config.GetSection("BskyConfig:Auth").Get<BskyConfigAuth>()
         ?? throw new Exception("Could not read config");
+    private readonly LofiConfig _lofiConfig =
+        config.GetSection("LofiConfig").Get<LofiConfig>()
+        ?? throw new Exception("Could not read config");
+    private readonly CancellationTokenSource _cts = new();
+    private readonly object _printLock = new();
+    private Session? _session;
+    private List<string>? _following;
+    private long? _lastCursor;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -34,71 +40,133 @@ public class LofiWorker(
             throw new Exception("Not logged in");
         }
 
-        _following = (await cache.GetFollowing(proto, _session.Did, cancellationToken))
-            .Select(s => s.ToString())
-            .ToList();
+        if (_lofiConfig.CruiseOwnFeed)
+        {
+            _following = (await cache.GetFollowing(proto, _session.Did, cancellationToken))
+                .Select(s => s.ToString())
+                .ToList();
+        }
+
         jsc.Message += OnMessage;
 
-        Console.WriteLine("Jamming on the feed...");
+        long? backfillCursor =
+            _lofiConfig.BackfillMinutes.HasValue && _lofiConfig.BackfillMinutes.Value > 0
+                ? new DateTimeOffset(
+                    DateTime.UtcNow - TimeSpan.FromMinutes(_lofiConfig.BackfillMinutes.Value)
+                ).ToUnixTimeMilliseconds() * 1000
+                : null;
 
         await jsc.Start(
-            getCursor: () =>
-                new DateTimeOffset(
-                    DateTime.UtcNow - TimeSpan.FromMinutes(10)
-                ).ToUnixTimeMilliseconds() * 1000,
-            wantedCollections: [BskyConstants.COLLECTION_TYPE_POST],
+            getCursor: () => _lastCursor ?? backfillCursor,
             cancellationToken: cancellationToken
         );
+
+        Console.WriteLine("Jamming on the feed...");
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        await _cts.CancelAsync();
         await jsc.Stop();
     }
 
     private void OnMessage(object? sender, JetstreamMessage e)
     {
+        _lastCursor = e.TimeMicroseconds;
+
+        if (e.Commit == null)
+        {
+            return;
+        }
         if (
-            e.Commit?.Collection != BskyConstants.COLLECTION_TYPE_POST
-            || e.Commit?.Operation != JetstreamOperation.Create
+            e.Commit.Collection != BskyConstants.COLLECTION_TYPE_POST
+            || e.Commit.Operation != JetstreamOperation.Create
         )
         {
             return;
         }
         if (
-            (e.Did != _session?.Did.ToString())
+            _lofiConfig.CruiseOwnFeed
+            && (e.Did != _session?.Did.ToString())
             && (_following == null || !_following.Contains(e.Did))
         )
         {
             return;
         }
-        if (e.Commit?.Record is AppBskyFeedPost post)
+        if (e.Commit.Record is AppBskyFeedPost post)
         {
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await HandlePost(e.Did, e.Commit.RecordKey, post);
+                    await HandlePost(e, post);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Got error handling post");
+                    if (ex is TaskCanceledException)
+                    {
+                        // Do nothing
+                    }
+                    else
+                    {
+                        logger.LogError(ex, "Got error handling post");
+                    }
                 }
             });
         }
     }
 
-    private async Task HandlePost(string did, string rkey, AppBskyFeedPost post)
+    private async Task HandlePost(JetstreamMessage msg, AppBskyFeedPost post)
     {
-        // Do all the async work up front
-        var profile = await cache.GetProfile(proto, ATDid.Create(did)!);
-        var replyProfile =
-            post.Reply != null
-                ? await cache.GetProfile(proto, new ATUri(post.Reply.Parent.Uri).Did!)
-                : null;
+        if (post.Reply != null)
+        {
+            // Handle config checks
+            if (!_lofiConfig.CruiseOwnFeed || _lofiConfig.HideReplies)
+            {
+                return;
+            }
+            if (_lofiConfig.HideRepliesToNotFollowing && _following != null)
+            {
+                var parentDid = ATUri.Create(post.Reply.Parent.Uri).Did?.ToString();
+                var rootDid = ATUri.Create(post.Reply.Root.Uri).Did?.ToString();
+                if (
+                    (parentDid != null && !_following.Contains(parentDid))
+                    || (rootDid != null && !_following.Contains(rootDid))
+                )
+                {
+                    return;
+                }
+            }
+        }
 
-        var report = new LofiReport(did, rkey, post, profile, replyProfile);
-        report.Print();
+        var posts = new string?[] { msg.ToAtUri(), post.Reply?.Parent?.Uri, post.Reply?.Root?.Uri }
+            .WhereNotNull()
+            .Select(ATUri.Create)
+            .WhereNotNull();
+
+        var hydratedReq = await proto.Feed.GetPostsAsync(posts, _cts.Token);
+        var hydrated = hydratedReq.HandleResult();
+        var msgPost = hydrated.Posts.SingleOrDefault(s => s.Uri.ToString() == msg.ToAtUri());
+        if (msgPost == null)
+        {
+            // failed to hydrate
+            return;
+        }
+
+        var replyParentPost = hydrated.Posts.SingleOrDefault(s =>
+            s.Uri.ToString() == post.Reply?.Parent?.Uri
+        );
+        var replyRootPost = hydrated.Posts.SingleOrDefault(s =>
+            s.Uri.ToString() == post.Reply?.Root?.Uri
+        );
+
+        var report = new LofiReport(msgPost, replyParentPost, replyRootPost);
+
+        // Ensure we're only printing one post at a time
+        lock (_printLock)
+        {
+            report.Print(_lofiConfig);
+        }
     }
 
     private async Task EnsureLogin(CancellationToken cancellationToken = default)
@@ -108,94 +176,11 @@ public class LofiWorker(
             _session =
                 proto.Session
                 ?? await proto.AuthenticateWithPasswordAsync(
-                    bskyAuthConfig.Username,
-                    bskyAuthConfig.Password,
+                    _bskyAuthConfig.Username,
+                    _bskyAuthConfig.Password,
                     cancellationToken: cancellationToken
                 )
                 ?? throw new Exception("Failed to login");
         }
     }
-
-    private static string TerminalURL(string caption, string url) =>
-        $"\u001B]8;;{url}\a{caption}\u001B]8;;\a";
-
-    private record LofiReport(
-        string Did,
-        string Rkey,
-        AppBskyFeedPost Post,
-        FeedProfile? Profile,
-        FeedProfile? ReplyToProfile
-    )
-    {
-        public void Print()
-        {
-            var displayName = Profile?.DisplayName ?? "?";
-            var handle = Profile?.Handle ?? Did;
-
-            var now = Post.CreatedAt.ToLocalTime().ToShortTimeString();
-
-            Console.WriteLine();
-
-            Console.ForegroundColor = ConsoleColor.DarkBlue;
-            Console.Write($"[{now}] ");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            Console.Write($"{displayName} ");
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.Write($"(@{handle}) ");
-
-            Console.ForegroundColor = ConsoleColor.Gray;
-            if (Post.Reply != null)
-            {
-                Console.Write($"replied to ");
-
-                var replyHandle =
-                    ReplyToProfile?.Handle
-                    ?? new ATUri(Post.Reply.Parent.Uri).Did?.ToString()
-                    ?? "?";
-
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.Write($"@{replyHandle}");
-            }
-            else
-            {
-                Console.Write("posted");
-            }
-
-            Console.ForegroundColor = ConsoleColor.Gray;
-            Console.Write(": ");
-
-            Console.ForegroundColor = ConsoleColor.Blue;
-            Console.Write(TerminalURL("(web)", $"https://bsky.app/profile/{Did}/post/{Rkey}"));
-            Console.ForegroundColor = ConsoleColor.Gray;
-            Console.WriteLine();
-
-            if (string.IsNullOrWhiteSpace(Post.Text))
-            {
-                Console.ForegroundColor = ConsoleColor.DarkRed;
-                Console.WriteLine("    (no text)");
-            }
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.White;
-                Console.WriteLine(Post.Text);
-            }
-
-            if (Post.Embed != null)
-            {
-                Console.ForegroundColor = ConsoleColor.DarkMagenta;
-                Console.Write("  Embeds: ");
-                Console.WriteLine(
-                    JsonSerializer.Serialize(
-                        Post.Embed,
-                        new JsonSerializerOptions
-                        {
-                            DefaultIgnoreCondition =
-                                JsonIgnoreCondition.WhenWritingDefault
-                                | JsonIgnoreCondition.WhenWritingNull,
-                        }
-                    )
-                );
-            }
-        }
-    };
 }
