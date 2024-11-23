@@ -8,18 +8,11 @@ using ZstdSharp;
 
 namespace KaukoBskyFeeds.Ingest.Jetstream;
 
-public class JetstreamConsumerWSC : BaseJetstreamConsumer
+public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJetstreamConsumer
 {
-    private readonly ILogger<JetstreamConsumerWSC> _logger;
     private readonly Decompressor _decompressor = GetDecompressor();
     private WebsocketClient? _wsClient;
-    private readonly CancellationTokenSource _cancelSource;
-
-    public JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
-    {
-        _logger = logger;
-        _cancelSource = new CancellationTokenSource();
-    }
+    private readonly CancellationTokenSource _cancelSource = new();
 
     public override async Task Start(
         Func<long?>? getCursor = null,
@@ -28,7 +21,7 @@ public class JetstreamConsumerWSC : BaseJetstreamConsumer
     )
     {
         var wsUri = GetWsUri(getCursor: getCursor, wantedCollections: wantedCollections);
-        _logger.LogDebug("Connecting to Jetstream with URI {uri}", wsUri);
+        logger.LogDebug("Connecting to Jetstream with URI {uri}", wsUri);
 
         var factory = new Func<ClientWebSocket>(() =>
         {
@@ -42,16 +35,16 @@ public class JetstreamConsumerWSC : BaseJetstreamConsumer
             ReconnectTimeout = TimeSpan.FromSeconds(30),
         };
         _wsClient.ReconnectionHappened.Subscribe(info =>
-            _logger.LogInformation("Reconnection happened, type: {type}", info.Type)
+            logger.LogInformation("Reconnection happened, type: {type}", info.Type)
         );
         _wsClient.DisconnectionHappened.Subscribe(info =>
         {
             if (info.Exception != null)
             {
-                _logger.LogError(info.Exception, "Got exception inside Websocket");
+                logger.LogError(info.Exception, "Got exception inside Websocket");
             }
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Disconnection happened, type: {type}, status: {closeStatus}, description: {closeDescription}",
                 info.Type,
                 info.CloseStatus,
@@ -68,7 +61,7 @@ public class JetstreamConsumerWSC : BaseJetstreamConsumer
                     getCursor: getCursor,
                     wantedCollections: wantedCollections
                 );
-                _logger.LogDebug("Switching Jetstream URI to {uri}", _wsClient.Url);
+                logger.LogDebug("Switching Jetstream URI to {uri}", _wsClient.Url);
             }
         });
         _wsClient.MessageReceived.Subscribe(OnMessageReceived);
@@ -83,7 +76,7 @@ public class JetstreamConsumerWSC : BaseJetstreamConsumer
 
     public override async Task Stop()
     {
-        _logger.LogDebug("Stopping consumer");
+        logger.LogDebug("Stopping consumer");
         if (_wsClient != null)
         {
             await _wsClient.Stop(WebSocketCloseStatus.NormalClosure, "");
@@ -95,7 +88,7 @@ public class JetstreamConsumerWSC : BaseJetstreamConsumer
     {
         if (_cancelSource.IsCancellationRequested)
         {
-            _logger.LogDebug("OMR during cancellation");
+            logger.LogDebug("OMR during cancellation");
             return;
         }
 
@@ -115,7 +108,7 @@ public class JetstreamConsumerWSC : BaseJetstreamConsumer
             }
             else
             {
-                _logger.LogError("Got unknown message type: {msgType}", message.MessageType);
+                logger.LogError("Got unknown message type: {msgType}", message.MessageType);
                 return;
             }
 
@@ -131,12 +124,12 @@ public class JetstreamConsumerWSC : BaseJetstreamConsumer
             }
             catch (JsonException je)
             {
-                _logger.LogError(je, "Failed to deserialize JSON: {json}", serializedStr);
+                logger.LogError(je, "Failed to deserialize JSON: {json}", serializedStr);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Got exception in message processing");
+            logger.LogError(ex, "Got exception in message processing");
         }
     }
 }

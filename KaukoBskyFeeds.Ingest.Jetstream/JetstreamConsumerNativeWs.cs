@@ -6,18 +6,12 @@ using ZstdSharp;
 
 namespace KaukoBskyFeeds.Ingest.Jetstream;
 
-public class JetstreamConsumerNativeWs : BaseJetstreamConsumer
+public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger)
+    : BaseJetstreamConsumer
 {
-    private readonly ILogger<JetstreamConsumerNativeWs> _logger;
     private readonly Decompressor _decompressor = GetDecompressor();
     private ClientWebSocket? _wsClient;
-    private readonly CancellationTokenSource _cancelSource;
-
-    public JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger)
-    {
-        _logger = logger;
-        _cancelSource = new CancellationTokenSource();
-    }
+    private readonly CancellationTokenSource _cancelSource = new CancellationTokenSource();
 
     public override async Task Start(
         Func<long?>? getCursor = null,
@@ -45,11 +39,11 @@ public class JetstreamConsumerNativeWs : BaseJetstreamConsumer
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Got exception in listen loop");
+                        logger.LogError(ex, "Got exception in listen loop");
                     }
                 } while (!_cancelSource.IsCancellationRequested);
 
-                _logger.LogWarning("Consumer is shutting down");
+                logger.LogWarning("Consumer is shutting down");
 
                 await _wsClient.CloseAsync(
                     WebSocketCloseStatus.NormalClosure,
@@ -104,7 +98,7 @@ public class JetstreamConsumerNativeWs : BaseJetstreamConsumer
                     }
                     catch (ZstdException zex)
                     {
-                        _logger.LogError(zex, "Decompression error");
+                        logger.LogError(zex, "Decompression error");
                         throw;
                     }
                 }
@@ -130,7 +124,7 @@ public class JetstreamConsumerNativeWs : BaseJetstreamConsumer
             }
             catch (JsonException jex)
             {
-                _logger.LogError(jex, "JSON deserialization error");
+                logger.LogError(jex, "JSON deserialization error");
 
                 try
                 {
@@ -138,11 +132,11 @@ public class JetstreamConsumerNativeWs : BaseJetstreamConsumer
                     textStream.Seek(0, SeekOrigin.Begin);
                     using var sr = new StreamReader(textStream);
                     var lines = await sr.ReadToEndAsync(cancellationToken);
-                    _logger.LogInformation("JSON failure text was: {lines}", lines);
+                    logger.LogInformation("JSON failure text was: {lines}", lines);
                 }
                 catch (Exception zexi)
                 {
-                    _logger.LogError(zexi, "Got error trying to decode the decompression failure");
+                    logger.LogError(zexi, "Got error trying to decode the decompression failure");
                 }
                 throw;
             }

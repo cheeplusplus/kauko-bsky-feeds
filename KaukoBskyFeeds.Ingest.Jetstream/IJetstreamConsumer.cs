@@ -19,8 +19,15 @@ public interface IJetstreamConsumer
 
 public abstract class BaseJetstreamConsumer : IJetstreamConsumer
 {
-    public const string JETSTREAM_URL = "wss://jetstream1.us-west.bsky.network";
+    public static readonly string[] JETSTREAM_URLS =
+    [
+        "wss://jetstream1.us-east.bsky.network",
+        "wss://jetstream2.us-east.bsky.network",
+        "wss://jetstream1.us-west.bsky.network",
+        "wss://jetstream2.us-west.bsky.network",
+    ];
     public static readonly string[] DEFAULT_COLLECTIONS = [BskyConstants.COLLECTION_TYPE_POST];
+    private const int REPLAY_WINDOW_MS = 3000;
 
     public event EventHandler<JetstreamMessage>? Message;
     public long LastEventTime { get; protected set; }
@@ -51,11 +58,15 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
     }
 
     protected static Uri GetWsUri(
-        string hostUrl = JETSTREAM_URL,
         Func<long?>? getCursor = null,
-        IEnumerable<string>? wantedCollections = null
+        IEnumerable<string>? wantedCollections = null,
+        string? hostUrl = null
     )
     {
+        var chosenHostUrl =
+            hostUrl
+            ?? Random.Shared.GetItems(JETSTREAM_URLS, 1).FirstOrDefault()
+            ?? JETSTREAM_URLS[0];
         long? cursor = getCursor == null ? null : getCursor();
 
         // require an actually empty list to send nothing
@@ -64,7 +75,10 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
         var querySegments = new Dictionary<string, string>();
         if (cursor != null && cursor >= 0)
         {
-            var cursorStr = cursor.ToString();
+            var replayCursor = cursor.Value - (REPLAY_WINDOW_MS * 1000); // cursor is in microseconds
+            replayCursor = Math.Max(replayCursor, 0);
+
+            var cursorStr = replayCursor.ToString();
             if (cursorStr != null)
             {
                 querySegments.Add("cursor", cursorStr);
@@ -79,7 +93,7 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
                 ? "?" + string.Join('&', querySegments.Select(s => $"{s.Key}={s.Value}"))
                 : null;
 
-        var jetstreamUri = new UriBuilder(hostUrl) { Path = "/subscribe", Query = queryStr };
+        var jetstreamUri = new UriBuilder(chosenHostUrl) { Path = "/subscribe", Query = queryStr };
 
         return jetstreamUri.Uri;
     }

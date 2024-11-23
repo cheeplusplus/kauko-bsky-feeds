@@ -23,6 +23,7 @@ public class JetstreamWorker : IHostedService
     private readonly CancellationTokenSource _channelCancel = new();
     private Post? _cursorEvent;
     private DateTime _lastSave = DateTime.MinValue;
+    private int _lastSaveCount = 0;
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
 
@@ -157,18 +158,24 @@ public class JetstreamWorker : IHostedService
         // Save every 10 seconds
         if (DateTime.Now - TimeSpan.FromSeconds(10) > _lastSave)
         {
-            await CommitDb(cancellationToken);
-            _lastSave = DateTime.Now;
-            _lastSaveMarker = message.MessageTime;
+            var saveCount = await CommitDb(cancellationToken);
 
             // Log on us catching up if we're behind
             if (_lastSaveMarker < (DateTime.UtcNow - TimeSpan.FromSeconds(60)))
             {
                 _logger.LogInformation(
-                    "Catching up, {timespan} behind",
-                    DateTime.UtcNow - message.MessageTime
+                    "Catching up, {timespan} behind ({writes:N} writes/s, {posts:N} posts/s)",
+                    DateTime.UtcNow - message.MessageTime,
+                    saveCount / (DateTime.Now - _lastSave).TotalSeconds,
+                    saveCount
+                        / (
+                            message.MessageTime - (_lastSaveMarker ?? DateTime.MinValue)
+                        ).TotalSeconds
                 );
             }
+
+            _lastSave = DateTime.Now;
+            _lastSaveMarker = message.MessageTime;
         }
 
         // Clean up every 10 minutes
@@ -184,10 +191,11 @@ public class JetstreamWorker : IHostedService
         }
     }
 
-    private async Task CommitDb(CancellationToken cancellationToken = default)
+    private async Task<int> CommitDb(CancellationToken cancellationToken = default)
     {
         var count = await _db.SaveChangesAsync(cancellationToken);
         _db.ChangeTracker.Clear();
         _logger.LogDebug("Committed {count} changes to disk", count);
+        return count;
     }
 }
