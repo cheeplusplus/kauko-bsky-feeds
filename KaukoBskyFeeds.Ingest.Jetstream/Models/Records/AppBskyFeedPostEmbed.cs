@@ -6,6 +6,10 @@ namespace KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 [JsonPolymorphic(IgnoreUnrecognizedTypeDiscriminators = true)]
 [JsonDerivedType(typeof(AppBskyFeedPostEmbedImages), BskyConstants.POST_EMBED_TYPE_IMAGES)]
 [JsonDerivedType(typeof(AppBskyFeedPostEmbedRecord), BskyConstants.POST_EMBED_TYPE_RECORD)]
+[JsonDerivedType(
+    typeof(AppBskyFeedPostEmbedRecordWithMedia),
+    BskyConstants.POST_EMBED_TYPE_RECORD_WITH_MEDIA
+)]
 public class AppBskyFeedPostEmbed { }
 
 public class AppBskyFeedPostEmbedImages : AppBskyFeedPostEmbed
@@ -29,8 +33,37 @@ public class AppBskyFeedPostEmbedImageImage
     public required string MimeType { get; set; }
 }
 
-public class AppBskyFeedPostEmbedRecord : AppBskyFeedPostEmbed
+public interface AppBskyFeedPostEmbedWithRecord
+{
+    AtStrongRef? Record { get; }
+}
+
+public class AppBskyFeedPostEmbedRecord : AppBskyFeedPostEmbed, AppBskyFeedPostEmbedWithRecord
 {
     [JsonPropertyName("record")]
     public required AtStrongRef Record { get; set; }
+}
+
+public class AppBskyFeedPostEmbedRecordWithMedia
+    : AppBskyFeedPostEmbed,
+        AppBskyFeedPostEmbedWithRecord
+{
+    [JsonPropertyName("media")]
+    public required AppBskyFeedPostEmbed Media { get; set; }
+
+    [JsonPropertyName("record")]
+    public required AppBskyFeedPostEmbed RawRecord { get; set; }
+
+    [JsonIgnore]
+    public AtStrongRef? Record
+    {
+        get
+        {
+            if (RawRecord is not AppBskyFeedPostEmbedRecord embedRecord)
+            {
+                return null;
+            }
+            return embedRecord.Record;
+        }
+    }
 }

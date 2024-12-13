@@ -2,11 +2,14 @@ using System.Globalization;
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
+using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Registry;
+using KaukoBskyFeeds.Feeds.Utils;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace KaukoBskyFeeds.Web.Controllers;
 
@@ -17,6 +20,7 @@ public class DevController(
     IWebHostEnvironment env,
     IConfiguration configuration,
     FeedRegistry feedRegistry,
+    FeedDbContext dbContext,
     ATProtocol proto
 ) : ControllerBase
 {
@@ -80,6 +84,92 @@ public class DevController(
         Response.Headers.Append("X-Bsky-Cursor", feedSkel.Cursor);
         return TypedResults.Json(hydrated, proto.Options.JsonSerializerOptions);
     }
+
+    [HttpGet("query/user")]
+    public async Task<Results<NotFound, JsonHttpResult<FeedProfile>>> QueryUser(
+        [FromQuery] string handle,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!env.IsDevelopment())
+        {
+            return TypedResults.NotFound();
+        }
+
+        // Attempt login on first fetch
+        await EnsureLogin(cancellationToken);
+        if (_session == null)
+        {
+            throw new Exception("Not logged in!");
+        }
+
+        var handled = ATHandle.Create(handle) ?? throw new Exception("Failed to create handle");
+        var resolvedDidRes = await proto.Identity.ResolveHandleAsync(handled, cancellationToken);
+        var resolvedDid = resolvedDidRes.HandleResult();
+        if (resolvedDid?.Did == null)
+        {
+            throw new Exception("Failed to resolve DID");
+        }
+        var profileRes = await proto.Actor.GetProfileAsync(resolvedDid.Did, cancellationToken);
+        var profile = profileRes.HandleResult();
+        return TypedResults.Json(profile, proto.Options.JsonSerializerOptions);
+    }
+
+    [HttpGet("query/post")]
+    public async Task<Results<NotFound, JsonHttpResult<PostView>>> QueryPost(
+        [FromQuery] string atUri,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!env.IsDevelopment())
+        {
+            return TypedResults.NotFound();
+        }
+
+        // Attempt login on first fetch
+        await EnsureLogin(cancellationToken);
+        if (_session == null)
+        {
+            throw new Exception("Not logged in!");
+        }
+
+        var postRes = await proto.Feed.GetPostsAsync([ATUri.Create(atUri)], cancellationToken);
+        var post = postRes.HandleResult().Posts.FirstOrDefault();
+        return TypedResults.Json(post, proto.Options.JsonSerializerOptions);
+    }
+
+    [HttpGet("query/cached-post")]
+    public async Task<Results<NotFound, JsonHttpResult<CachedPostResponse>>> QueryCachedPost(
+        [FromQuery] string did,
+        [FromQuery] string rkey,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!env.IsDevelopment())
+        {
+            return TypedResults.NotFound();
+        }
+
+        var post = await dbContext.Posts.SingleOrDefaultAsync(
+            s => s.Did == did && s.Rkey == rkey,
+            cancellationToken
+        );
+        if (post == null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var atUri = post.ToAtUri().ToString();
+        var resp = new CachedPostResponse(
+            atUri,
+            post,
+            await post.GetTotalInteractionCount(dbContext, cancellationToken)
+        );
+
+        return TypedResults.Json(resp);
+    }
+
+    public record CachedPostResponse(string AtUri, Db.Models.Post Post, long TotalInteractions);
 
     [HttpGet("install")]
     public async Task<Results<NotFound, Ok<string>>> Install(

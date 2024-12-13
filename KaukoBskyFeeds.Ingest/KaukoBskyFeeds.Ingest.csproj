@@ -12,15 +12,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\KaukoBskyFeeds.Ingest.Jetstream\KaukoBskyFeeds.Ingest.Jetstream.csproj" />
-    <ProjectReference Include="..\KaukoBskyFeeds.Db\KaukoBskyFeeds.Db.csproj" />
-    <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
-    <ProjectReference Include="..\KaukoBskyFeeds.Redis\KaukoBskyFeeds.Redis.csproj" />
+    <PackageReference Include="FishyFlip" Version="2.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FishyFlip" Version="2.1.1" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Ingest.Jetstream\KaukoBskyFeeds.Ingest.Jetstream.csproj" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Db\KaukoBskyFeeds.Db.csproj" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
   </ItemGroup>
 
 </Project>

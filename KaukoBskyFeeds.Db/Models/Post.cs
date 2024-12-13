@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
 namespace KaukoBskyFeeds.Db.Models;
@@ -30,6 +31,30 @@ public class Post
     public string? ReplyParentUri { get; set; }
     public string? ReplyRootUri { get; set; }
     public PostEmbeds? Embeds { get; set; }
+
+    public async Task<int> GetTotalInteractionCount(
+        FeedDbContext context,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var likes = await context.PostLikes.CountAsync(
+            c => c.ParentDid == Did && c.ParentRkey == Rkey,
+            cancellationToken
+        );
+        var qp = await context.PostQuotePosts.CountAsync(
+            c => c.ParentDid == Did && c.ParentRkey == Rkey,
+            cancellationToken
+        );
+        var replies = await context.PostReplies.CountAsync(
+            c => c.ParentDid == Did && c.ParentRkey == Rkey,
+            cancellationToken
+        );
+        var reposts = await context.PostReposts.CountAsync(
+            c => c.ParentDid == Did && c.ParentRkey == Rkey,
+            cancellationToken
+        );
+        return likes + qp + replies + reposts;
+    }
 }
 
 public class PostEmbeds

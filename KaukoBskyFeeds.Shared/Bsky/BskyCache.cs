@@ -1,11 +1,10 @@
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
-using KaukoBskyFeeds.Shared.Bsky;
-using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
-namespace KaukoBskyFeeds.Redis;
+namespace KaukoBskyFeeds.Shared.Bsky;
 
 public interface IBskyCache
 {
@@ -31,12 +30,13 @@ public interface IBskyCache
     );
 }
 
-public class BskyCache(ILogger<BskyCache> logger, HybridCache cache) : IBskyCache
+public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCache
 {
-    public static readonly TimeSpan LONG_CACHE_DURATION = TimeSpan.FromMinutes(60);
     public static readonly TimeSpan CACHE_DURATION = TimeSpan.FromMinutes(10);
-    public static readonly HybridCacheEntryOptions HYBRID_CACHE_OPTS =
-        new() { LocalCacheExpiration = CACHE_DURATION, Expiration = LONG_CACHE_DURATION };
+    public static readonly MemoryCacheEntryOptions DEFAULT_OPTS = new()
+    {
+        AbsoluteExpirationRelativeToNow = CACHE_DURATION,
+    };
 
     public async Task<IEnumerable<ATDid>> GetFollowing(
         ATProtocol proto,
@@ -51,7 +51,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache) : IBskyCach
 
         return await cache.GetOrCreateAsync(
                 $"user_{user}_following",
-                async (cacheEntry) =>
+                async (_) =>
                 {
                     logger.LogDebug("Fetching user {listUri} following", user);
                     return (
@@ -70,9 +70,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache) : IBskyCach
                         )
                     ).Select(s => s.Did).ToList();
                 },
-                HYBRID_CACHE_OPTS,
-                tags: [$"user:{user}"],
-                cancellationToken: cancellationToken
+                DEFAULT_OPTS
             ) ?? [];
     }
 
@@ -89,7 +87,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache) : IBskyCach
 
         return await cache.GetOrCreateAsync(
                 $"user_{user}_followers",
-                async (cacheEntry) =>
+                async (_) =>
                 {
                     logger.LogDebug("Fetching user {listUri} followers", user);
                     return (
@@ -108,9 +106,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache) : IBskyCach
                         )
                     ).Select(s => s.Did).ToList();
                 },
-                HYBRID_CACHE_OPTS,
-                tags: [$"user:{user}"],
-                cancellationToken: cancellationToken
+                DEFAULT_OPTS
             ) ?? [];
     }
 
@@ -127,7 +123,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache) : IBskyCach
 
         return await cache.GetOrCreateAsync(
                 $"list_{listUri}_members",
-                async (cacheEntry) =>
+                async (_) =>
                 {
                     logger.LogDebug("Fetching list {listUri} members list", listUri);
                     var listMembers = await BskyExtensions.GetAllResults(
@@ -152,9 +148,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache) : IBskyCach
 
                     return listMemberDids;
                 },
-                HYBRID_CACHE_OPTS,
-                tags: [$"list:{listUri}"],
-                cancellationToken: cancellationToken
+                DEFAULT_OPTS
             ) ?? [];
     }
 
@@ -171,15 +165,13 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache) : IBskyCach
 
         return await cache.GetOrCreateAsync(
             $"user_{user}_profile",
-            async (cacheEntry) =>
+            async (_) =>
             {
                 logger.LogDebug("Fetching user {user} profile", user);
                 var profileRes = await proto.Actor.GetProfileAsync(user, cancellationToken);
                 return profileRes.HandleResult();
             },
-            HYBRID_CACHE_OPTS,
-            tags: [$"user:{user}"],
-            cancellationToken: cancellationToken
+            DEFAULT_OPTS
         );
     }
 }

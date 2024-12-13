@@ -8,6 +8,10 @@ namespace KaukoBskyFeeds.Db;
 public class FeedDbContext(DbContextOptions<FeedDbContext> options) : DbContext(options)
 {
     public required DbSet<Post> Posts { get; set; }
+    public required DbSet<PostLike> PostLikes { get; set; }
+    public required DbSet<PostQuotePost> PostQuotePosts { get; set; }
+    public required DbSet<PostReply> PostReplies { get; set; }
+    public required DbSet<PostRepost> PostReposts { get; set; }
 
     public string DbPath { get; } = "jetstream.db";
 
@@ -62,11 +66,11 @@ public class PostUpsertInterceptor : DbCommandInterceptor
 
     private static void ManipulateCommand(DbCommand command)
     {
-        if (command.CommandText.StartsWith("INSERT INTO \"Posts\" ", StringComparison.Ordinal))
+        if (command.CommandText.StartsWith("INSERT INTO \"Post", StringComparison.Ordinal))
         {
             command.CommandText = command.CommandText.Replace(
-                "INSERT INTO \"Posts\" ",
-                "INSERT OR IGNORE INTO \"Posts\" "
+                "INSERT INTO \"Post",
+                "INSERT OR IGNORE INTO \"Post"
             );
         }
     }

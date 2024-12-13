@@ -26,7 +26,12 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
         "wss://jetstream1.us-west.bsky.network",
         "wss://jetstream2.us-west.bsky.network",
     ];
-    public static readonly string[] DEFAULT_COLLECTIONS = [BskyConstants.COLLECTION_TYPE_POST];
+    public static readonly string[] DEFAULT_COLLECTIONS =
+    [
+        BskyConstants.COLLECTION_TYPE_POST,
+        BskyConstants.COLLECTION_TYPE_LIKE,
+        BskyConstants.COLLECTION_TYPE_REPOST,
+    ];
     private const int REPLAY_WINDOW_MS = 3000;
 
     public event EventHandler<JetstreamMessage>? Message;
@@ -72,7 +77,7 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
         // require an actually empty list to send nothing
         wantedCollections ??= DEFAULT_COLLECTIONS;
 
-        var querySegments = new Dictionary<string, string>();
+        var querySegments = new List<KeyValuePair<string, string>>();
         if (cursor != null && cursor >= 0)
         {
             var replayCursor = cursor.Value - (REPLAY_WINDOW_MS * 1000); // cursor is in microseconds
@@ -81,12 +86,15 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
             var cursorStr = replayCursor.ToString();
             if (cursorStr != null)
             {
-                querySegments.Add("cursor", cursorStr);
+                querySegments.Add(new KeyValuePair<string, string>("cursor", cursorStr));
             }
         }
         if (wantedCollections?.Any() ?? false)
         {
-            querySegments.Add("wantedCollections", string.Join(',', wantedCollections));
+            foreach (var coll in wantedCollections)
+            {
+                querySegments.Add(new KeyValuePair<string, string>("wantedCollections", coll));
+            }
         }
         var queryStr =
             querySegments.Count > 0

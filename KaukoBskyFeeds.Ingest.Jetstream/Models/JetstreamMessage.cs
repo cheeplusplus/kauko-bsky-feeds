@@ -28,11 +28,7 @@ public class JetstreamMessage
 
     public string ToAtUri()
     {
-        var recordType =
-            Commit?.Record?.GetType() == typeof(AppBskyFeedPost)
-                ? BskyConstants.COLLECTION_TYPE_POST
-                : "?";
-        var path = string.Join('/', [recordType, Commit?.RecordKey]);
+        var path = string.Join('/', [Commit?.Collection, Commit?.RecordKey]);
         var pathStr = string.IsNullOrEmpty(path) ? "" : $"/{path}";
         return $"at://{Did}{pathStr}";
     }

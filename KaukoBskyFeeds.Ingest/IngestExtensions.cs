@@ -59,4 +59,122 @@ public static class IngestExtensions
 
         return null;
     }
+
+    public static PostLike? AsDbPostLike(this JetstreamMessage message)
+    {
+        if (message.Commit?.Record is not AppBskyFeedLike like)
+        {
+            return null;
+        }
+
+        var (subjectDid, subjectRkey) = GetPairFromATUri(like.Subject.Uri);
+        if (subjectDid == null || subjectRkey == null)
+        {
+            return null;
+        }
+
+        return new PostLike
+        {
+            LikeDid = message.Did,
+            LikeRkey = message.Commit.RecordKey,
+            ParentDid = subjectDid,
+            ParentRkey = subjectRkey,
+            EventTime = message.MessageTime,
+            EventTimeUs = message.TimeMicroseconds,
+        };
+    }
+
+    public static PostQuotePost? AsDbPostQuotePost(this JetstreamMessage message)
+    {
+        if (message.Commit?.Record is not AppBskyFeedPost post)
+        {
+            return null;
+        }
+
+        string? recordUri = null;
+        if (post.Embed is AppBskyFeedPostEmbedWithRecord embedRecord)
+        {
+            recordUri = embedRecord.Record?.Uri;
+        }
+        if (recordUri == null)
+        {
+            return null;
+        }
+
+        var (subjectDid, subjectRkey) = GetPairFromATUri(recordUri);
+        if (subjectDid == null || subjectRkey == null)
+        {
+            return null;
+        }
+
+        return new PostQuotePost
+        {
+            QuoteDid = message.Did,
+            QuoteRkey = message.Commit.RecordKey,
+            ParentDid = subjectDid,
+            ParentRkey = subjectRkey,
+            EventTime = message.MessageTime,
+            EventTimeUs = message.TimeMicroseconds,
+        };
+    }
+
+    public static PostReply? AsDbPostReply(this JetstreamMessage message)
+    {
+        if (message.Commit?.Record is not AppBskyFeedPost post || post.Reply == null)
+        {
+            return null;
+        }
+
+        var (subjectDid, subjectRkey) = GetPairFromATUri(post.Reply.Parent.Uri);
+        if (subjectDid == null || subjectRkey == null)
+        {
+            return null;
+        }
+
+        return new PostReply
+        {
+            ReplyDid = message.Did,
+            ReplyRkey = message.Commit.RecordKey,
+            ParentDid = subjectDid,
+            ParentRkey = subjectRkey,
+            EventTime = message.MessageTime,
+            EventTimeUs = message.TimeMicroseconds,
+        };
+    }
+
+    public static PostRepost? AsDbPostRepost(this JetstreamMessage message)
+    {
+        if (message.Commit?.Record is not AppBskyFeedRepost repost)
+        {
+            return null;
+        }
+
+        var (subjectDid, subjectRkey) = GetPairFromATUri(repost.Subject.Uri);
+        if (subjectDid == null || subjectRkey == null)
+        {
+            return null;
+        }
+
+        return new PostRepost
+        {
+            RepostDid = message.Did,
+            RepostRkey = message.Commit.RecordKey,
+            ParentDid = subjectDid,
+            ParentRkey = subjectRkey,
+            EventTime = message.MessageTime,
+            EventTimeUs = message.TimeMicroseconds,
+        };
+    }
+
+    private static (string?, string?) GetPairFromATUri(string uri)
+    {
+        var subjectUri = FishyFlip.Models.ATUri.Create(uri);
+        var subjectDid = subjectUri.Did?.ToString();
+        var subjectRkey = subjectUri.Rkey;
+        if (string.IsNullOrEmpty(subjectDid) || string.IsNullOrEmpty(subjectRkey))
+        {
+            return (null, null);
+        }
+        return (subjectDid, subjectRkey);
+    }
 }

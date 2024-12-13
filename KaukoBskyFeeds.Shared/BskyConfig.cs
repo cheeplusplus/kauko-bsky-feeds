@@ -22,3 +22,29 @@ public record BaseFeedConfig(
     string Description,
     bool RestrictToFeedOwner = false
 );
+
+public static class BskyConfigExtensions
+{
+    public static (string, string) GetDataDir(string rootFile)
+    {
+        var dataDir = Directory.GetCurrentDirectory();
+        var bskyConfigPath = Path.Join(dataDir, rootFile);
+
+        var upCounter = 0;
+        while (!File.Exists(bskyConfigPath) && upCounter < 4)
+        {
+            // Move up
+            dataDir = Path.Join(dataDir, "..");
+            bskyConfigPath = Path.Join(dataDir, rootFile);
+
+            upCounter++;
+        }
+
+        if (!File.Exists(bskyConfigPath))
+        {
+            throw new Exception("Couldn't find " + rootFile);
+        }
+
+        return (dataDir, bskyConfigPath);
+    }
+}

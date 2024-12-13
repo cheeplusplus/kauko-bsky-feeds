@@ -1,7 +1,7 @@
 ﻿using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Workers;
-using KaukoBskyFeeds.Redis;
+using KaukoBskyFeeds.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -10,16 +10,18 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Configuration.AddJsonFile("ingest.config.json", optional: true);
 
-builder.Services.AddDbContext<FeedDbContext>(
-    (db) =>
-    {
-        // db.EnableSensitiveDataLogging();
-        db.ConfigureWarnings(b => b.Log((RelationalEventId.CommandExecuted, LogLevel.Trace)));
-    }
-);
-builder.Services.AddBskyRedis(builder.Configuration.GetConnectionString("Redis"));
+var (dataDir, bskyConfigPath) = BskyConfigExtensions.GetDataDir("ingest.config.json");
+builder.Configuration.AddJsonFile(bskyConfigPath);
+
+builder.Services.AddDbContext<FeedDbContext>(options =>
+{
+    var dbPath = Path.Join(dataDir, "jetstream.db");
+    options.UseSqlite($"Data Source={dbPath}");
+
+    // db.EnableSensitiveDataLogging();
+    options.ConfigureWarnings(b => b.Log((RelationalEventId.CommandExecuted, LogLevel.Trace)));
+});
 
 // builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();

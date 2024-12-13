@@ -3,6 +3,7 @@ using System;
 using KaukoBskyFeeds.Db;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace KaukoBskyFeeds.Db.Migrations
 {
     [DbContext(typeof(FeedDbContext))]
-    partial class FeedDbContextModelSnapshot : ModelSnapshot
+    [Migration("20241213070408_AddInfoTables")]
+    partial class AddInfoTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");

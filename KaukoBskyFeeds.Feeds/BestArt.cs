@@ -5,12 +5,9 @@ using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
-using KaukoBskyFeeds.Redis;
-using KaukoBskyFeeds.Redis.FastStore;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Caching.Memory;
 using Post = KaukoBskyFeeds.Db.Models.Post;
@@ -22,13 +19,11 @@ public class BestArt(
     ATProtocol proto,
     BestArtFeedConfig feedConfig,
     FeedDbContext db,
-    IFastStore fastStore,
-    HybridCache hCache,
+    IMemoryCache mCache,
     IBskyCache bsCache
 ) : IFeed
 {
-    private const int FEED_LIMIT = 50;
-    private const int DB_PAGE_SIZE = 50;
+    private const int FEED_LIMIT = 25; // restriction on artist did fetch
     private const int MIN_INTERACTIONS = 3;
 
     public BaseFeedConfig Config => feedConfig;
@@ -41,13 +36,13 @@ public class BestArt(
     )
     {
         // TODO: Don't pass the limit into the uncached func, always fetch with max and limit after the cache
-        return await hCache.GetOrCreateAsync(
+        return await mCache.GetOrCreateAsync(
                 $"BestArtFeed|list_{feedConfig.RestrictToListUri ?? "all"}|bal_{feedConfig.BalanceInteractions ?? false}",
                 async (opts) =>
                 {
                     return await GetFeedSkeletonUncached(cancellationToken);
                 },
-                BskyCache.HYBRID_CACHE_OPTS
+                BskyCache.DEFAULT_OPTS
             ) ?? new CustomSkeletonFeed([], null);
     }
 
@@ -73,27 +68,14 @@ public class BestArt(
 
         // Page through the database
         List<PostIdealizer> postsZipped = [];
-        IEnumerable<Post> postPage;
-        do
+        foreach (var post in postsQuery)
         {
-            postPage = await postsQuery.Take(DB_PAGE_SIZE).ToListAsync(cancellationToken);
-
-            await Parallel.ForEachAsync(
-                postPage,
-                cancellationToken,
-                async (post, ct) =>
-                {
-                    var ic = await fastStore.GetTotalInteractionCount(post.ToAtUri().ToString());
-                    if (ic >= MIN_INTERACTIONS)
-                    {
-                        postsZipped.Add(new PostIdealizer(post, ic));
-                    }
-                }
-            );
-
-            postsQuery = postsQuery.Skip(DB_PAGE_SIZE);
-        } while (postPage.Count() >= DB_PAGE_SIZE && postsZipped.Count < FEED_LIMIT);
-
+            var ic = await post.GetTotalInteractionCount(db, cancellationToken);
+            if (ic > MIN_INTERACTIONS)
+            {
+                postsZipped.Add(new PostIdealizer(post, ic));
+            }
+        }
         if (postsZipped.Count < 1)
         {
             // Exit early
@@ -101,20 +83,26 @@ public class BestArt(
         }
 
         // Cut to the final candidates before performing sorting
-        var finalPostList = postsZipped.Take(FEED_LIMIT).ToList();
+        var finalPostList = postsZipped
+            .OrderByDescending(o => o.InteractionCount)
+            .Take(FEED_LIMIT)
+            .ToList();
 
         IEnumerable<SortedFeedResult> sortedFeed;
         if (feedConfig.BalanceInteractions ?? false)
         {
             // Balance likes and reposts to the artist's follower count
-            var authorDids = finalPostList.Select(s => s.AuthorDid).Distinct().ToArray();
+            var authorDids = finalPostList
+                .Select(s => s.AuthorDid)
+                .DistinctBy(s => s.ToString())
+                .ToArray();
             var authorsHydratedReq = await proto.Actor.GetProfilesAsync(
                 authorDids,
                 cancellationToken
             );
             var authorsHydrated = authorsHydratedReq.HandleResult();
 
-            var authorsZipped = finalPostList
+            sortedFeed = finalPostList
                 .Select(s => new
                 {
                     Author = authorsHydrated?.Profiles?.SingleOrDefault(h =>
@@ -123,14 +111,12 @@ public class BestArt(
                     s.Post,
                     s.InteractionCount,
                 })
-                .Where(w => w.Author != null);
-
-            sortedFeed = authorsZipped
+                .Where(w => w.Author != null)
                 .Select(s => new SortedFeedResult(
                     s.Post,
-                    s.InteractionCount / s.Author!.FollowersCount
+                    (float)s.InteractionCount / s.Author!.FollowersCount
                 ))
-                .OrderBy(o => o.Score);
+                .OrderByDescending(o => o.Score);
         }
         else
         {

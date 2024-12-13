@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.WebSockets;
 using System.Text.Json;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
@@ -35,8 +34,16 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJe
             ReconnectTimeout = TimeSpan.FromSeconds(30),
         };
         _wsClient.ReconnectionHappened.Subscribe(info =>
-            logger.LogInformation("Reconnection happened, type: {type}", info.Type)
-        );
+        {
+            if (info.Type == ReconnectionType.Initial)
+            {
+                logger.LogInformation("Initial connection");
+            }
+            else
+            {
+                logger.LogInformation("Reconnection happened, type: {type}", info.Type);
+            }
+        });
         _wsClient.DisconnectionHappened.Subscribe(info =>
         {
             if (info.Exception != null)
@@ -117,6 +124,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJe
                 var deserializedMsg = JsonSerializer.Deserialize<JetstreamMessage>(serializedStr);
                 if (deserializedMsg == null)
                 {
+                    logger.LogWarning("Null JSON: {json}", serializedStr);
                     return;
                 }
                 LastEventTime = deserializedMsg.TimeMicroseconds;

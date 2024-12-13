@@ -17,8 +17,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KaukoBskyFeeds.Ingest.Jetst
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KaukoBskyFeeds.Lofi", "KaukoBskyFeeds.Lofi\KaukoBskyFeeds.Lofi.csproj", "{969CF343-A65A-46CE-8BB9-6BC974144148}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KaukoBskyFeeds.Redis", "KaukoBskyFeeds.Redis\KaukoBskyFeeds.Redis.csproj", "{5EAC01EF-DB2F-40F8-8583-722F0B6D027F}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
