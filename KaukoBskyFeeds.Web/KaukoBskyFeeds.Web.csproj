@@ -8,7 +8,7 @@
     <IsPublishable>true</IsPublishable>
     <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
     <ContainerRegistry>ghcr.io</ContainerRegistry>
-    <ContainerRepository>ghcr.io/cheeplusplus/kauko-bsky-feeds/kaukobskyfeed-server</ContainerRepository>
+    <ContainerRepository>ghcr.io/cheeplusplus/kauko-bsky-feeds/web</ContainerRepository>
   </PropertyGroup>
 
   <ItemGroup>

@@ -11,12 +11,12 @@ using Microsoft.Extensions.Logging;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-var (dataDir, bskyConfigPath) = BskyConfigExtensions.GetDataDir("ingest.config.json");
-builder.Configuration.AddJsonFile(bskyConfigPath);
+var dataPath = BskyConfigExtensions.GetDataDir("ingest.config.json");
+builder.Configuration.AddJsonFile(dataPath.ConfigPath);
 
 builder.Services.AddDbContext<FeedDbContext>(options =>
 {
-    var dbPath = Path.Join(dataDir, "jetstream.db");
+    var dbPath = Path.Join(dataPath.DbDir, "jetstream.db");
     options.UseSqlite($"Data Source={dbPath}");
 
     // db.EnableSensitiveDataLogging();

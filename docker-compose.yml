@@ -1,0 +1,22 @@
+services:
+  web:
+    image: ghcr.io/cheeplusplus/kauko-bsky-feeds/web
+    restart: always
+    ports:
+      - 3040:8080
+    volumes:
+      - jetstream-db:/app/data
+      - ./bsky.config.json:/app/bsky.config.json:ro
+
+  ingest:
+    image: ghcr.io/cheeplusplus/kauko-bsky-feeds/ingest
+    restart: always
+    volumes:
+      - jetstream-db:/app/data
+      - ./ingest.config.json:/app/ingest.config.json:ro
+    post_start:
+      - command: chown -R app:app /app/data
+        user: root
+
+volumes:
+  jetstream-db:

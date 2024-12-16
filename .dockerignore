@@ -1,1 +1,3 @@
-bsky.config.json
+.git
+*.config.json
+data/

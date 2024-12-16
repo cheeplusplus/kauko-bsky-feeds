@@ -25,17 +25,17 @@ public record BaseFeedConfig(
 
 public static class BskyConfigExtensions
 {
-    public static (string, string) GetDataDir(string rootFile)
+    public static DataDirInfo GetDataDir(string rootFile)
     {
-        var dataDir = Directory.GetCurrentDirectory();
-        var bskyConfigPath = Path.Join(dataDir, rootFile);
+        var configDir = Directory.GetCurrentDirectory();
+        var bskyConfigPath = Path.Join(configDir, rootFile);
 
         var upCounter = 0;
         while (!File.Exists(bskyConfigPath) && upCounter < 4)
         {
             // Move up
-            dataDir = Path.Join(dataDir, "..");
-            bskyConfigPath = Path.Join(dataDir, rootFile);
+            configDir = Path.Join(configDir, "..");
+            bskyConfigPath = Path.Join(configDir, rootFile);
 
             upCounter++;
         }
@@ -45,6 +45,9 @@ public static class BskyConfigExtensions
             throw new Exception("Couldn't find " + rootFile);
         }
 
-        return (dataDir, bskyConfigPath);
+        var dbDir = Path.Join(configDir, "data");
+        return new DataDirInfo(bskyConfigPath, dbDir);
     }
+
+    public record DataDirInfo(string ConfigPath, string DbDir);
 }
