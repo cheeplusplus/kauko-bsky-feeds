@@ -40,6 +40,8 @@ public class TimelineMinusList(
         }
         if (requestor == null)
         {
+            // We need a requestor in order to reconstruct their feed
+            // Defaulting to the session user is incorrect
             throw new FeedProhibitedException();
         }
 

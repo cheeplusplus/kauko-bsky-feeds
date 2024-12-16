@@ -168,9 +168,24 @@ public class JetstreamWorker : IHostedService
         {
             _logger.LogInformation("Performing db cleanup");
             var threeDaysAgo = DateTime.UtcNow - TimeSpan.FromDays(3);
-            var count = await _db
+
+            var count1 = await _db
                 .Posts.Where(s => s.EventTime < threeDaysAgo)
                 .ExecuteDeleteAsync(cancellationToken);
+            var count2 = await _db
+                .PostLikes.Where(s => s.EventTime < threeDaysAgo)
+                .ExecuteDeleteAsync(cancellationToken);
+            var count3 = await _db
+                .PostQuotePosts.Where(s => s.EventTime < threeDaysAgo)
+                .ExecuteDeleteAsync(cancellationToken);
+            var count4 = await _db
+                .PostReplies.Where(s => s.EventTime < threeDaysAgo)
+                .ExecuteDeleteAsync(cancellationToken);
+            var count5 = await _db
+                .PostReposts.Where(s => s.EventTime < threeDaysAgo)
+                .ExecuteDeleteAsync(cancellationToken);
+            var count = count1 + count2 + count3 + count4 + count5;
+
             _lastCleanup = DateTime.Now;
             _logger.LogInformation("Cleanup complete, {count} records pruned", count);
         }
