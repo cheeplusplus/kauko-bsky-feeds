@@ -1,4 +1,4 @@
-using System.Threading.Channels;
+using EFCore.BulkExtensions;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Ingest.Jetstream;
@@ -9,7 +9,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ZstdSharp.Unsafe;
 
 namespace KaukoBskyFeeds.Ingest.Workers;
 
@@ -19,12 +18,11 @@ public class JetstreamWorker : IHostedService
     private readonly FeedDbContext _db;
     private readonly IJetstreamConsumer _consumer;
     private readonly bool _consumeFromHistoricFeed = false;
-    private readonly Channel<JetstreamMessage> _channel =
-        Channel.CreateUnbounded<JetstreamMessage>();
-    private readonly CancellationTokenSource _channelCancel = new();
+    private readonly CancellationTokenSource _readCancel = new();
     private DateTime _lastSave = DateTime.MinValue;
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
+    private readonly BulkInsertHolder _insertHolder;
 
     public JetstreamWorker(
         ILogger<JetstreamWorker> logger,
@@ -37,13 +35,13 @@ public class JetstreamWorker : IHostedService
         _consumeFromHistoricFeed = configuration.GetValue<bool>("IngestConfig:ConsumeHistoricFeed");
         _db = db;
         _consumer = consumer;
-        _consumer.Message += (_, msg) => _channel.Writer.TryWrite(msg);
+        _insertHolder = new BulkInsertHolder(db);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         // Begin to consume the reading channel
-        _ = Task.Run(() => ReadChannel(_channelCancel.Token), cancellationToken);
+        _ = Task.Run(() => ReadChannel(_readCancel.Token), cancellationToken);
 
         // Start consuming
         await _consumer.Start(FetchLatestCursor, cancellationToken: cancellationToken);
@@ -55,8 +53,7 @@ public class JetstreamWorker : IHostedService
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         await _consumer.Stop();
-        _channel.Writer.TryComplete();
-        await _channelCancel.CancelAsync(); // cancel after complete - may not be needed or should be later in the lifecycle
+        await _readCancel.CancelAsync(); // cancel after complete - may not be needed or should be later in the lifecycle
         await CommitDb(cancellationToken); // make sure we're up to date before leaving
     }
 
@@ -103,13 +100,22 @@ public class JetstreamWorker : IHostedService
         try
         {
             // Continously consume from the channel until cancelled
-            while (await _channel.Reader.WaitToReadAsync(cancellationToken))
+            while (await _consumer.ChannelReader.WaitToReadAsync(cancellationToken))
             {
-                while (_channel.Reader.TryRead(out var msg))
+                while (_consumer.ChannelReader.TryRead(out var msg))
                 {
                     try
                     {
                         await HandleMessage(msg, cancellationToken);
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // Ignore
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Break the loop
+                        return;
                     }
                     catch (Exception ex)
                     {
@@ -133,20 +139,21 @@ public class JetstreamWorker : IHostedService
     {
         if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_POST)
         {
-            await HandleMessage_Post(message, cancellationToken);
+            HandleMessage_Post(message);
         }
         else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_LIKE)
         {
-            await HandleMessage_Like(message, cancellationToken);
+            HandleMessage_Like(message);
         }
         else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_REPOST)
         {
-            await HandleMessage_Repost(message, cancellationToken);
+            HandleMessage_Repost(message);
         }
 
         // Save every 10 seconds
         if (DateTime.Now - TimeSpan.FromSeconds(10) > _lastSave)
         {
+            _logger.LogDebug("Committing to disk...");
             var saveCount = await CommitDb(cancellationToken);
 
             // Log on us catching up if we're behind
@@ -169,6 +176,8 @@ public class JetstreamWorker : IHostedService
             _logger.LogInformation("Performing db cleanup");
             var threeDaysAgo = DateTime.UtcNow - TimeSpan.FromDays(3);
 
+            using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
             var count1 = await _db
                 .Posts.Where(s => s.EventTime < threeDaysAgo)
                 .ExecuteDeleteAsync(cancellationToken);
@@ -186,108 +195,35 @@ public class JetstreamWorker : IHostedService
                 .ExecuteDeleteAsync(cancellationToken);
             var count = count1 + count2 + count3 + count4 + count5;
 
+            await transaction.CommitAsync(cancellationToken);
+
             _lastCleanup = DateTime.Now;
             _logger.LogInformation("Cleanup complete, {count} records pruned", count);
         }
     }
 
-    private async Task HandleMessage_Post(
-        JetstreamMessage message,
-        CancellationToken cancellationToken
-    )
+    private void HandleMessage_Post(JetstreamMessage message)
     {
         if (message.Commit?.Operation == null)
         {
             return;
         }
-        var messageAtUri = message.ToAtUri();
 
         if (message.Commit.Operation == JetstreamOperation.Create)
         {
             var post = message.ToDbPost();
             if (post != null)
             {
-                try
-                {
-                    _db.Posts.Add(post);
-                }
-                catch (InvalidOperationException) { }
-
                 var reply = message.AsDbPostReply();
-                if (reply != null)
-                {
-                    try
-                    {
-                        _db.PostReplies.Add(reply);
-                    }
-                    catch (InvalidOperationException) { }
-                }
                 var quotePost = message.AsDbPostQuotePost();
-                if (quotePost != null)
-                {
-                    try
-                    {
-                        _db.PostQuotePosts.Add(quotePost);
-                    }
-                    catch (InvalidOperationException) { }
-                }
 
-                /*if (post.ReplyParentUri != null)
-                {
-                    await _fastStore.AddReply(post.ReplyParentUri, messageAtUri);
-                }
-                if (post.Embeds?.RecordUri != null)
-                {
-                    await _fastStore.AddQuotePost(post.Embeds.RecordUri, messageAtUri);
-                }*/
+                _insertHolder.Add(post, reply, quotePost);
             }
         }
         else if (message.Commit.Operation == JetstreamOperation.Delete)
         {
-            /*var deletedPost = await _db.Posts.SingleOrDefaultAsync(
-                w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey,
-                cancellationToken
-            );
-            if (deletedPost != null)
-            {
-                // Clean up
-                if (deletedPost.ReplyParentUri != null)
-                {
-                    await _fastStore.RemoveReply(deletedPost.ReplyParentUri, messageAtUri);
-                }
-                if (deletedPost.Embeds?.RecordUri != null)
-                {
-                    await _fastStore.RemoveQuotePost(deletedPost.Embeds.RecordUri, messageAtUri);
-                }
-                await _fastStore.DeleteTopLevelPost(messageAtUri);
-            }*/
-
             // Delete everything related to this post
-            await _db
-                .Posts.Where(w => w.Did == message.Did && w.Rkey == message.Commit.RecordKey)
-                .ExecuteDeleteAsync(cancellationToken);
-            await _db
-                .PostLikes.Where(w =>
-                    w.ParentDid == message.Did && w.ParentRkey == message.Commit.RecordKey
-                )
-                .ExecuteDeleteAsync(cancellationToken);
-            await _db
-                .PostQuotePosts.Where(w =>
-                    (w.QuoteDid == message.Did && w.QuoteRkey == message.Commit.RecordKey)
-                    || (w.ParentDid == message.Did && w.ParentRkey == message.Commit.RecordKey)
-                )
-                .ExecuteDeleteAsync(cancellationToken);
-            await _db
-                .PostReplies.Where(w =>
-                    (w.ReplyDid == message.Did && w.ReplyRkey == message.Commit.RecordKey)
-                    || (w.ParentDid == message.Did && w.ParentRkey == message.Commit.RecordKey)
-                )
-                .ExecuteDeleteAsync(cancellationToken);
-            await _db
-                .PostReplies.Where(w =>
-                    w.ParentDid == message.Did && w.ParentRkey == message.Commit.RecordKey
-                )
-                .ExecuteDeleteAsync(cancellationToken);
+            _insertHolder.DeletePost(message.Did, message.Commit.RecordKey);
         }
         else
         {
@@ -300,10 +236,7 @@ public class JetstreamWorker : IHostedService
         }
     }
 
-    private async Task HandleMessage_Like(
-        JetstreamMessage message,
-        CancellationToken cancellationToken
-    )
+    private void HandleMessage_Like(JetstreamMessage message)
     {
         if (message.Commit?.Record is not AppBskyFeedLike)
         {
@@ -312,25 +245,21 @@ public class JetstreamWorker : IHostedService
 
         if (message.Commit.Operation == JetstreamOperation.Create)
         {
-            // await _fastStore.AddLike(commitRecord.Subject.Uri, message.Did);
             var like = message.AsDbPostLike();
             if (like != null)
             {
-                try
-                {
-                    _db.PostLikes.Add(like);
-                }
-                catch (InvalidOperationException) { }
+                _insertHolder.Add(like);
             }
         }
         else if (message.Commit.Operation == JetstreamOperation.Delete)
         {
-            // await _fastStore.RemoveLike(commitRecord.Subject.Uri, message.Did);
-            await _db
-                .PostLikes.Where(w =>
-                    w.LikeDid == message.Did && w.LikeRkey == message.Commit.RecordKey
-                )
-                .ExecuteDeleteAsync(cancellationToken);
+            _insertHolder.Delete(
+                new PostRecordRef(message.Did, message.Commit.RecordKey),
+                db =>
+                    db.PostLikes.Where(w =>
+                        w.LikeDid == message.Did && w.LikeRkey == message.Commit.RecordKey
+                    )
+            );
         }
         else
         {
@@ -343,10 +272,7 @@ public class JetstreamWorker : IHostedService
         }
     }
 
-    private async Task HandleMessage_Repost(
-        JetstreamMessage message,
-        CancellationToken cancellationToken
-    )
+    private void HandleMessage_Repost(JetstreamMessage message)
     {
         if (message.Commit?.Record is not AppBskyFeedRepost commitRecord)
         {
@@ -359,21 +285,18 @@ public class JetstreamWorker : IHostedService
             var repost = message.AsDbPostRepost();
             if (repost != null)
             {
-                try
-                {
-                    _db.PostReposts.Add(repost);
-                }
-                catch (InvalidOperationException) { }
+                _insertHolder.Add(repost);
             }
         }
         else if (message.Commit.Operation == JetstreamOperation.Delete)
         {
-            // await _fastStore.RemoveRepost(commitRecord.Subject.Uri, message.Did);
-            await _db
-                .PostReposts.Where(w =>
-                    w.RepostDid == message.Did && w.RepostRkey == message.Commit.RecordKey
-                )
-                .ExecuteDeleteAsync(cancellationToken);
+            _insertHolder.Delete(
+                new PostRecordRef(message.Did, message.Commit.RecordKey),
+                db =>
+                    db.PostReposts.Where(w =>
+                        w.RepostDid == message.Did && w.RepostRkey == message.Commit.RecordKey
+                    )
+            );
         }
         else
         {
@@ -388,9 +311,144 @@ public class JetstreamWorker : IHostedService
 
     private async Task<int> CommitDb(CancellationToken cancellationToken = default)
     {
-        var count = await _db.SaveChangesAsync(cancellationToken);
-        _db.ChangeTracker.Clear();
-        _logger.LogDebug("Committed {count} changes to disk", count);
-        return count;
+        var (upserts, deletes) = await _insertHolder.Commit(cancellationToken);
+        _logger.LogDebug(
+            "Committed {upserts} writes and {deletes} deletes to disk",
+            upserts,
+            deletes
+        );
+        return upserts + deletes;
+    }
+}
+
+class BulkInsertHolder(FeedDbContext db)
+{
+    private readonly Dictionary<PostRecordRef, Post> Posts = [];
+    private readonly List<IQueryable<Post>> PostDeletes = [];
+    private readonly Dictionary<PostRecordRef, PostLike> PostLikes = [];
+    private readonly List<IQueryable<PostLike>> PostLikeDeletes = [];
+    private readonly Dictionary<PostRecordRef, PostQuotePost> PostQuotePosts = [];
+    private readonly List<IQueryable<PostQuotePost>> PostQuoteDeletes = [];
+    private readonly Dictionary<PostRecordRef, PostReply> PostReplies = [];
+    private readonly List<IQueryable<PostReply>> PostReplyDeletes = [];
+    private readonly Dictionary<PostRecordRef, PostRepost> PostReposts = [];
+    private readonly List<IQueryable<PostRepost>> PostRepostDeletes = [];
+
+    public void Add(Post item, PostReply? reply, PostQuotePost? quotePost)
+    {
+        Posts.TryAdd(item.Ref, item);
+        if (reply != null)
+        {
+            PostReplies.TryAdd(reply.Ref, reply);
+        }
+        if (quotePost != null)
+        {
+            PostQuotePosts.TryAdd(quotePost.Ref, quotePost);
+        }
+    }
+
+    public void DeletePost(string did, string rkey)
+    {
+        var key = new PostRecordRef(did, rkey);
+
+        PostDeletes.Add(db.Posts.Where(w => w.Did == did && w.Rkey == rkey));
+        Posts.Remove(key);
+        PostLikeDeletes.Add(db.PostLikes.Where(w => w.ParentDid == did && w.ParentRkey == rkey));
+        PostLikes.Remove(key);
+        PostQuoteDeletes.Add(
+            db.PostQuotePosts.Where(w => w.ParentDid == did && w.ParentRkey == rkey)
+        );
+        PostQuotePosts.Remove(key);
+        PostReplyDeletes.Add(db.PostReplies.Where(w => w.ParentDid == did && w.ParentRkey == rkey));
+        PostReplies.Remove(key);
+        PostRepostDeletes.Add(
+            db.PostReposts.Where(w => w.ParentDid == did && w.ParentRkey == rkey)
+        );
+        PostReposts.Remove(key);
+    }
+
+    public void Add(PostLike item)
+    {
+        PostLikes.TryAdd(item.Ref, item);
+    }
+
+    public void Delete(PostRecordRef key, Func<FeedDbContext, IQueryable<PostLike>> deleteExpr)
+    {
+        PostLikeDeletes.Add(deleteExpr(db));
+        PostLikes.Remove(key);
+    }
+
+    public void Add(PostRepost item)
+    {
+        PostReposts.TryAdd(item.Ref, item);
+    }
+
+    public void Delete(PostRecordRef key, Func<FeedDbContext, IQueryable<PostRepost>> deleteExpr)
+    {
+        PostRepostDeletes.Add(deleteExpr(db));
+        PostReposts.Remove(key);
+    }
+
+    public async Task<(int, int)> Commit(CancellationToken cancellationToken)
+    {
+        db.ChangeTracker.Clear();
+
+        using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        await db.BulkInsertOrUpdateAsync(Posts.Values, cancellationToken: cancellationToken);
+        await db.BulkInsertOrUpdateAsync(PostLikes.Values, cancellationToken: cancellationToken);
+        await db.BulkInsertOrUpdateAsync(
+            PostQuotePosts.Values,
+            cancellationToken: cancellationToken
+        );
+        await db.BulkInsertOrUpdateAsync(PostReplies.Values, cancellationToken: cancellationToken);
+        await db.BulkInsertOrUpdateAsync(PostReposts.Values, cancellationToken: cancellationToken);
+
+        int deletes = 0;
+        foreach (var req in PostDeletes)
+        {
+            deletes += await req.ExecuteDeleteAsync(cancellationToken);
+        }
+        foreach (var req in PostLikeDeletes)
+        {
+            deletes += await req.ExecuteDeleteAsync(cancellationToken);
+        }
+        foreach (var req in PostQuoteDeletes)
+        {
+            deletes += await req.ExecuteDeleteAsync(cancellationToken);
+        }
+        foreach (var req in PostReplyDeletes)
+        {
+            deletes += await req.ExecuteDeleteAsync(cancellationToken);
+        }
+        foreach (var req in PostRepostDeletes)
+        {
+            deletes += await req.ExecuteDeleteAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
+        var upserts =
+            Posts.Count
+            + PostLikes.Count
+            + PostQuotePosts.Count
+            + PostReplies.Count
+            + PostReposts.Count;
+
+        // Clear after committing the transaction successfully
+        Posts.Clear();
+        PostDeletes.Clear();
+        PostLikes.Clear();
+        PostLikeDeletes.Clear();
+        PostQuotePosts.Clear();
+        PostQuoteDeletes.Clear();
+        PostReplies.Clear();
+        PostReplyDeletes.Clear();
+        PostReposts.Clear();
+        PostRepostDeletes.Clear();
+
+        db.ChangeTracker.Clear();
+
+        return (upserts, deletes);
     }
 }

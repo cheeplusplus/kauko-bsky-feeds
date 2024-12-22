@@ -75,7 +75,7 @@ public static class PostExtensions
 
     public static ATDid? GetEmbedRecordDid(this Post post)
     {
-        return GetDidFromAtUri(post.Embeds?.RecordUri);
+        return GetDidFromAtUri(post.EmbedRecordUri);
     }
 
     private static ATUri? GetAtUriFromString(string? uri)

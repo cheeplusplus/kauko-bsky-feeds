@@ -216,7 +216,7 @@ public class TimelineMinusList(
         }
 
         // Quote post
-        if (post.Embeds?.RecordUri != null)
+        if (post.EmbedRecordUri != null)
         {
             var embedRecordDid = post.GetEmbedRecordDid();
 

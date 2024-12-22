@@ -55,10 +55,10 @@ public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger
         );
     }
 
-    public override Task Stop()
+    public override async Task Stop()
     {
+        await base.Stop();
         _cancelSource.Cancel();
-        return Task.CompletedTask;
     }
 
     private async Task Listen(CancellationToken cancellationToken)
@@ -119,7 +119,7 @@ public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger
                 if (deserialized != null)
                 {
                     LastEventTime = deserialized.TimeMicroseconds;
-                    OnMessage(deserialized);
+                    await ChannelWriter.WriteAsync(deserialized, cancellationToken);
                 }
             }
             catch (JsonException jex)

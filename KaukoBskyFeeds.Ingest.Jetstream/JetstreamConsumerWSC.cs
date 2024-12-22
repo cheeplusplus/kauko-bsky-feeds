@@ -1,5 +1,7 @@
 using System.Net.WebSockets;
+using System.Reactive.Linq;
 using System.Text.Json;
+using System.Threading.Channels;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using Microsoft.Extensions.Logging;
 using Websocket.Client;
@@ -7,11 +9,14 @@ using ZstdSharp;
 
 namespace KaukoBskyFeeds.Ingest.Jetstream;
 
-public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJetstreamConsumer
+public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
+    : BaseJetstreamConsumer,
+        IDisposable
 {
     private readonly Decompressor _decompressor = GetDecompressor();
     private WebsocketClient? _wsClient;
     private readonly CancellationTokenSource _cancelSource = new();
+    private readonly List<IDisposable> _disposers = [];
 
     public override async Task Start(
         Func<long?>? getCursor = null,
@@ -29,11 +34,13 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJe
             client.Options.SetRequestHeader("User-Agent", "KaukoBskyFeeds.Ingest.Jetstream/1.0");
             return client;
         });
+
         _wsClient = new WebsocketClient(wsUri, factory)
         {
             ReconnectTimeout = TimeSpan.FromSeconds(30),
         };
-        _wsClient.ReconnectionHappened.Subscribe(info =>
+
+        var reconnSubscription = _wsClient.ReconnectionHappened.Subscribe(info =>
         {
             if (info.Type == ReconnectionType.Initial)
             {
@@ -44,7 +51,9 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJe
                 logger.LogInformation("Reconnection happened, type: {type}", info.Type);
             }
         });
-        _wsClient.DisconnectionHappened.Subscribe(info =>
+        _disposers.Add(reconnSubscription);
+
+        var disconSubscription = _wsClient.DisconnectionHappened.Subscribe(info =>
         {
             if (info.Exception != null)
             {
@@ -71,7 +80,10 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJe
                 logger.LogDebug("Switching Jetstream URI to {uri}", _wsClient.Url);
             }
         });
-        _wsClient.MessageReceived.Subscribe(OnMessageReceived);
+        _disposers.Add(disconSubscription);
+
+        var messageSubscription = _wsClient.MessageReceived.SubscribeAsync(OnMessageReceived);
+        _disposers.Add(messageSubscription);
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -83,15 +95,18 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJe
 
     public override async Task Stop()
     {
+        await base.Stop();
+
         logger.LogDebug("Stopping consumer");
         if (_wsClient != null)
         {
             await _wsClient.Stop(WebSocketCloseStatus.NormalClosure, "");
         }
+        _disposers.ForEach(f => f.Dispose());
         _cancelSource.Cancel();
     }
 
-    private void OnMessageReceived(ResponseMessage message)
+    private async Task OnMessageReceived(ResponseMessage message)
     {
         if (_cancelSource.IsCancellationRequested)
         {
@@ -128,16 +143,36 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger) : BaseJe
                     return;
                 }
                 LastEventTime = deserializedMsg.TimeMicroseconds;
-                OnMessage(deserializedMsg);
+                await ChannelWriter.WriteAsync(deserializedMsg);
             }
             catch (JsonException je)
             {
                 logger.LogError(je, "Failed to deserialize JSON: {json}", serializedStr);
             }
         }
+        catch (ChannelClosedException)
+        {
+            return;
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Got exception in message processing");
         }
     }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        _cancelSource.Cancel();
+        _wsClient?.Dispose();
+        _disposers.ForEach(f => f.Dispose());
+    }
+}
+
+public static class RxExtensions
+{
+    public static IDisposable SubscribeAsync<T>(
+        this IObservable<T> source,
+        Func<T, Task> onNextAsync
+    ) => source.Select(v => Observable.FromAsync(() => onNextAsync(v))).Concat().Subscribe();
 }

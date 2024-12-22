@@ -11,13 +11,23 @@ using Microsoft.Extensions.Logging;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-var dataPath = BskyConfigExtensions.GetDataDir("ingest.config.json");
-builder.Configuration.AddJsonFile(dataPath.ConfigPath);
+var bskyDataPath = BskyConfigExtensions.GetDataDir("bsky.config.json");
+builder.Configuration.AddJsonFile(bskyDataPath.ConfigPath);
+var ingestDataPath = BskyConfigExtensions.GetDataDir("ingest.config.json");
+builder.Configuration.AddJsonFile(ingestDataPath.ConfigPath);
 
 builder.Services.AddDbContext<FeedDbContext>(options =>
 {
-    var dbPath = Path.Join(dataPath.DbDir, "jetstream.db");
-    options.UseSqlite($"Data Source={dbPath}");
+    if (builder.Configuration.GetValue<string>("BskyConfig:Db:Provider") == "postgres")
+    {
+        var connStr = builder.Configuration.GetConnectionString("psqldb");
+        options.UseNpgsql(connStr);
+    }
+    else
+    {
+        var dbPath = Path.Join(bskyDataPath.DbDir, "jetstream.db");
+        options.UseSqlite($"Data Source={dbPath}");
+    }
 
     // db.EnableSensitiveDataLogging();
     options.ConfigureWarnings(b => b.Log((RelationalEventId.CommandExecuted, LogLevel.Trace)));

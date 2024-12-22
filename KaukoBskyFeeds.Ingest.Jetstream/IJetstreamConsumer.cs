@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Threading.Channels;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Shared.Bsky;
 using ZstdSharp;
@@ -7,7 +8,7 @@ namespace KaukoBskyFeeds.Ingest.Jetstream;
 
 public interface IJetstreamConsumer
 {
-    event EventHandler<JetstreamMessage>? Message;
+    public ChannelReader<JetstreamMessage> ChannelReader { get; }
     long LastEventTime { get; }
     Task Start(
         Func<long?>? getCursor = null,
@@ -34,19 +35,25 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
     ];
     private const int REPLAY_WINDOW_MS = 3000;
 
-    public event EventHandler<JetstreamMessage>? Message;
+    private readonly Channel<JetstreamMessage> _channel = Channel.CreateBounded<JetstreamMessage>(
+        10
+    );
+
+    public ChannelReader<JetstreamMessage> ChannelReader => _channel.Reader;
     public long LastEventTime { get; protected set; }
     public abstract Task Start(
         Func<long?>? getCursor = null,
         IEnumerable<string>? wantedCollections = null,
         CancellationToken cancellationToken = default
     );
-    public abstract Task Stop();
 
-    protected virtual void OnMessage(JetstreamMessage message)
+    public virtual Task Stop()
     {
-        Message?.Invoke(this, message);
+        _channel.Writer.TryComplete();
+        return Task.CompletedTask;
     }
+
+    protected ChannelWriter<JetstreamMessage> ChannelWriter => _channel.Writer;
 
     protected static Decompressor GetDecompressor()
     {

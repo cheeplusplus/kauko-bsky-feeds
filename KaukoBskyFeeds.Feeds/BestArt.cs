@@ -1,14 +1,16 @@
+using System.Runtime.CompilerServices;
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
+using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
-using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Post = KaukoBskyFeeds.Db.Models.Post;
 
@@ -51,9 +53,7 @@ public class BestArt(
     )
     {
         // Get all posts with images
-        var postsQuery = db.Posts.Where(w =>
-            w.Embeds != null && w.Embeds.Images != null && w.Embeds.Images.Count > 0
-        );
+        IQueryable<PostWithInteractions> postsQuery = db.PostsWithInteractions;
 
         if (feedConfig.RestrictToListUri != null)
         {
@@ -66,27 +66,20 @@ public class BestArt(
             postsQuery = postsQuery.Where(w => feedDids.Contains(w.Did));
         }
 
-        // Page through the database
-        List<PostIdealizer> postsZipped = [];
-        foreach (var post in postsQuery)
-        {
-            var ic = await post.GetTotalInteractionCount(db, cancellationToken);
-            if (ic > MIN_INTERACTIONS)
-            {
-                postsZipped.Add(new PostIdealizer(post, ic));
-            }
-        }
-        if (postsZipped.Count < 1)
+        postsQuery = postsQuery
+            .Where(w => (w.LikeCount + w.ReplyCount + w.RepostCount + w.QuotePostCount) > 3)
+            .OrderByDescending(o => o.LikeCount + o.ReplyCount + o.RepostCount + o.QuotePostCount)
+            .Take(FEED_LIMIT);
+
+        var finalPostList = await postsQuery
+            .Select(s => new PostIdealizer(s, s.TotalInteractions))
+            .ToListAsync(cancellationToken);
+
+        if (finalPostList.Count < 1)
         {
             // Exit early
             return new CustomSkeletonFeed([], null);
         }
-
-        // Cut to the final candidates before performing sorting
-        var finalPostList = postsZipped
-            .OrderByDescending(o => o.InteractionCount)
-            .Take(FEED_LIMIT)
-            .ToList();
 
         IEnumerable<SortedFeedResult> sortedFeed;
         if (feedConfig.BalanceInteractions ?? false)

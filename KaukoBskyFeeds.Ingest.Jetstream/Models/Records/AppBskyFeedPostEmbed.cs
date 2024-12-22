@@ -10,7 +10,20 @@ namespace KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
     typeof(AppBskyFeedPostEmbedRecordWithMedia),
     BskyConstants.POST_EMBED_TYPE_RECORD_WITH_MEDIA
 )]
-public class AppBskyFeedPostEmbed { }
+public class AppBskyFeedPostEmbed
+{
+    public string GetRecordType()
+    {
+        return this switch
+        {
+            AppBskyFeedPostEmbedImages ei => BskyConstants.POST_EMBED_TYPE_IMAGES,
+            AppBskyFeedPostEmbedRecord er => BskyConstants.POST_EMBED_TYPE_RECORD,
+            AppBskyFeedPostEmbedRecordWithMedia rwm =>
+                BskyConstants.POST_EMBED_TYPE_RECORD_WITH_MEDIA,
+            _ => "other",
+        };
+    }
+}
 
 public class AppBskyFeedPostEmbedImages : AppBskyFeedPostEmbed
 {
@@ -33,12 +46,12 @@ public class AppBskyFeedPostEmbedImageImage
     public required string MimeType { get; set; }
 }
 
-public interface AppBskyFeedPostEmbedWithRecord
+public interface IAppBskyFeedPostEmbedWithRecord
 {
     AtStrongRef? Record { get; }
 }
 
-public class AppBskyFeedPostEmbedRecord : AppBskyFeedPostEmbed, AppBskyFeedPostEmbedWithRecord
+public class AppBskyFeedPostEmbedRecord : AppBskyFeedPostEmbed, IAppBskyFeedPostEmbedWithRecord
 {
     [JsonPropertyName("record")]
     public required AtStrongRef Record { get; set; }
@@ -46,7 +59,7 @@ public class AppBskyFeedPostEmbedRecord : AppBskyFeedPostEmbed, AppBskyFeedPostE
 
 public class AppBskyFeedPostEmbedRecordWithMedia
     : AppBskyFeedPostEmbed,
-        AppBskyFeedPostEmbedWithRecord
+        IAppBskyFeedPostEmbedWithRecord
 {
     [JsonPropertyName("media")]
     public required AppBskyFeedPostEmbed Media { get; set; }

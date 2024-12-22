@@ -48,6 +48,15 @@ public static class BskyExtensions
     {
         return list.Where(w => w != null).Cast<T>();
     }
+
+    public static DateTime AsUTC(this DateTime dt)
+    {
+        if (dt.Kind == DateTimeKind.Utc)
+        {
+            return dt;
+        }
+        return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+    }
 }
 
 public class ATDidComparer : IEqualityComparer<ATDid>

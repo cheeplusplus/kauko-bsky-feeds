@@ -150,7 +150,7 @@ public class DevController(
             return TypedResults.NotFound();
         }
 
-        var post = await dbContext.Posts.SingleOrDefaultAsync(
+        var post = await dbContext.PostsWithInteractions.SingleOrDefaultAsync(
             s => s.Did == did && s.Rkey == rkey,
             cancellationToken
         );
@@ -160,11 +160,7 @@ public class DevController(
         }
 
         var atUri = post.ToAtUri().ToString();
-        var resp = new CachedPostResponse(
-            atUri,
-            post,
-            await post.GetTotalInteractionCount(dbContext, cancellationToken)
-        );
+        var resp = new CachedPostResponse(atUri, post, post.TotalInteractions);
 
         return TypedResults.Json(resp);
     }

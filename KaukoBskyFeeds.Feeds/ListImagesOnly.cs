@@ -39,9 +39,7 @@ public class ListImagesOnly(
             .Posts.LatestFromCursor(cursor)
             .Where(w =>
                 feedDids.Contains(w.Did)
-                && w.Embeds != null
-                && w.Embeds.Images != null
-                && w.Embeds.Images.Count > 0
+                && w.ImageCount > 0
                 && (w.ReplyParentUri == null || w.ReplyParentUri.StartsWith("at://" + w.Did))
             )
             .Take(limit ?? 50)

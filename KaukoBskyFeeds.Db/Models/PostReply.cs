@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
 namespace KaukoBskyFeeds.Db.Models;
@@ -6,7 +7,7 @@ namespace KaukoBskyFeeds.Db.Models;
 [PrimaryKey(nameof(ReplyDid), nameof(ReplyRkey))]
 [Index(nameof(ParentDid), nameof(ParentRkey))]
 [Index(nameof(EventTime))]
-public class PostReply
+public class PostReply : IPostInteraction
 {
     [Required]
     public required string ReplyDid { get; set; }
@@ -25,4 +26,10 @@ public class PostReply
 
     [Required]
     public long EventTimeUs { get; set; }
+
+    [NotMapped]
+    public PostRecordRef Ref => new(ReplyDid, ReplyRkey);
+
+    [NotMapped]
+    public PostRecordRef ParentRef => new(ParentDid, ParentRkey);
 }

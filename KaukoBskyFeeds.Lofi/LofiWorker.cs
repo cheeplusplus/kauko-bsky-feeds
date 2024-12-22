@@ -47,7 +47,7 @@ public class LofiWorker(
                 .ToList();
         }
 
-        jsc.Message += OnMessage;
+        _ = Task.Run(() => ReadChannel(), cancellationToken);
 
         long? backfillCursor =
             _lofiConfig.BackfillMinutes.HasValue && _lofiConfig.BackfillMinutes.Value > 0
@@ -61,7 +61,7 @@ public class LofiWorker(
             cancellationToken: cancellationToken
         );
 
-        Console.WriteLine("Jamming on the feed...");
+        logger.LogInformation("Jamming on the feed...");
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -70,7 +70,42 @@ public class LofiWorker(
         await jsc.Stop();
     }
 
-    private void OnMessage(object? sender, JetstreamMessage e)
+    private async void ReadChannel()
+    {
+        try
+        {
+            // Continously consume from the channel until cancelled
+            while (await jsc.ChannelReader.WaitToReadAsync(_cts.Token))
+            {
+                while (jsc.ChannelReader.TryRead(out var msg))
+                {
+                    try
+                    {
+                        await HandleMessage(msg);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Continue and just drop the message, for now
+                        logger.LogError(
+                            ex,
+                            "Encountered exception inside message writer on message {uri}",
+                            msg.ToAtUri()
+                        );
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to read from channel");
+        }
+    }
+
+    private async Task HandleMessage(JetstreamMessage e)
     {
         _lastCursor = e.TimeMicroseconds;
 
@@ -95,24 +130,7 @@ public class LofiWorker(
         }
         if (e.Commit.Record is AppBskyFeedPost post)
         {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await HandlePost(e, post);
-                }
-                catch (Exception ex)
-                {
-                    if (ex is TaskCanceledException)
-                    {
-                        // Do nothing
-                    }
-                    else
-                    {
-                        logger.LogError(ex, "Got error handling post");
-                    }
-                }
-            });
+            await HandlePost(e, post);
         }
     }
 

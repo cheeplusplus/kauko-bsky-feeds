@@ -1,3 +1,4 @@
+using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
@@ -18,46 +19,20 @@ public static class IngestExtensions
         {
             Did = post.Did,
             Rkey = post.Commit.RecordKey,
-            EventTime = post.MessageTime,
+            EventTime = post.MessageTime.AsUTC(),
             EventTimeUs = post.TimeMicroseconds,
-            CreatedAt = record.CreatedAt,
+            CreatedAt = record.CreatedAt.AsUTC(),
             Langs = record.Langs,
             Text = record.Text,
             ReplyParentUri = record.Reply?.Parent?.Uri,
             ReplyRootUri = record.Reply?.Root?.Uri,
-            Embeds = record.Embed?.ToDbPost(),
+            EmbedType = record.Embed?.GetRecordType(),
+            ImageCount = record.Embed is AppBskyFeedPostEmbedImages emb ? emb.Images.Count : 0,
+            EmbedRecordUri =
+                record.Embed is AppBskyFeedPostEmbedRecord rec ? rec.Record.Uri
+                : record.Embed is AppBskyFeedPostEmbedRecordWithMedia recm ? recm.Record?.Uri
+                : null,
         };
-    }
-
-    public static PostEmbeds? ToDbPost(this AppBskyFeedPostEmbed embed)
-    {
-        if (embed is AppBskyFeedPostEmbedImages imageEmbed)
-        {
-            // Image(s)
-            return new PostEmbeds
-            {
-                Images = imageEmbed
-                    .Images.Select(s =>
-                        // this really shouldn't be possible but it sure happens
-                        s.Image.Ref?.Link != null
-                            ? new PostEmbedImage
-                            {
-                                RefLink = s.Image.Ref.Link,
-                                MimeType = s.Image.MimeType,
-                            }
-                            : null
-                    )
-                    .WhereNotNull()
-                    .ToList(),
-            };
-        }
-        else if (embed is AppBskyFeedPostEmbedRecord recordEmbed)
-        {
-            // Quote
-            return new PostEmbeds { RecordUri = recordEmbed.Record.Uri };
-        }
-
-        return null;
     }
 
     public static PostLike? AsDbPostLike(this JetstreamMessage message)
@@ -79,7 +54,7 @@ public static class IngestExtensions
             LikeRkey = message.Commit.RecordKey,
             ParentDid = subjectDid,
             ParentRkey = subjectRkey,
-            EventTime = message.MessageTime,
+            EventTime = message.MessageTime.AsUTC(),
             EventTimeUs = message.TimeMicroseconds,
         };
     }
@@ -92,7 +67,7 @@ public static class IngestExtensions
         }
 
         string? recordUri = null;
-        if (post.Embed is AppBskyFeedPostEmbedWithRecord embedRecord)
+        if (post.Embed is IAppBskyFeedPostEmbedWithRecord embedRecord)
         {
             recordUri = embedRecord.Record?.Uri;
         }
@@ -113,7 +88,7 @@ public static class IngestExtensions
             QuoteRkey = message.Commit.RecordKey,
             ParentDid = subjectDid,
             ParentRkey = subjectRkey,
-            EventTime = message.MessageTime,
+            EventTime = message.MessageTime.AsUTC(),
             EventTimeUs = message.TimeMicroseconds,
         };
     }
@@ -137,7 +112,7 @@ public static class IngestExtensions
             ReplyRkey = message.Commit.RecordKey,
             ParentDid = subjectDid,
             ParentRkey = subjectRkey,
-            EventTime = message.MessageTime,
+            EventTime = message.MessageTime.AsUTC(),
             EventTimeUs = message.TimeMicroseconds,
         };
     }
@@ -161,7 +136,7 @@ public static class IngestExtensions
             RepostRkey = message.Commit.RecordKey,
             ParentDid = subjectDid,
             ParentRkey = subjectRkey,
-            EventTime = message.MessageTime,
+            EventTime = message.MessageTime.AsUTC(),
             EventTimeUs = message.TimeMicroseconds,
         };
     }

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +7,7 @@ namespace KaukoBskyFeeds.Db.Models;
 
 [PrimaryKey(nameof(Did), nameof(Rkey))]
 [Index(nameof(EventTime))]
-public class Post
+public class Post : IPostRecord
 {
     [Required]
     public required string Did { get; set; }
@@ -30,35 +31,21 @@ public class Post
 
     public string? ReplyParentUri { get; set; }
     public string? ReplyRootUri { get; set; }
-    public PostEmbeds? Embeds { get; set; }
 
-    public async Task<int> GetTotalInteractionCount(
-        FeedDbContext context,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var likes = await context.PostLikes.CountAsync(
-            c => c.ParentDid == Did && c.ParentRkey == Rkey,
-            cancellationToken
-        );
-        var qp = await context.PostQuotePosts.CountAsync(
-            c => c.ParentDid == Did && c.ParentRkey == Rkey,
-            cancellationToken
-        );
-        var replies = await context.PostReplies.CountAsync(
-            c => c.ParentDid == Did && c.ParentRkey == Rkey,
-            cancellationToken
-        );
-        var reposts = await context.PostReposts.CountAsync(
-            c => c.ParentDid == Did && c.ParentRkey == Rkey,
-            cancellationToken
-        );
-        return likes + qp + replies + reposts;
-    }
+    public string? EmbedType { get; set; }
+
+    [DefaultValue(0)]
+    public int ImageCount { get; set; }
+
+    public string? EmbedRecordUri { get; set; }
+
+    [NotMapped]
+    public PostRecordRef Ref => new(Did, Rkey);
 }
 
 public class PostEmbeds
 {
+    [NotMapped]
     public List<PostEmbedImage>? Images { get; set; }
     public string? RecordUri { get; set; }
 }

@@ -4,19 +4,33 @@ services:
     restart: always
     ports:
       - 3040:8080
+    environment:
+      - ConnectionStrings__psqldb="Host=postgres;Database=bskyfeed;Username=bskyfeed;Password=deefyksb"
     volumes:
-      - jetstream-db:/app/data
       - ./bsky.config.json:/app/bsky.config.json:ro
+    depends_on:
+      - postgres
 
   ingest:
     image: ghcr.io/cheeplusplus/kauko-bsky-feeds/ingest
     restart: always
     volumes:
-      - jetstream-db:/app/data
+      - ./bsky.config.json:/app/bsky.config.json:ro
       - ./ingest.config.json:/app/ingest.config.json:ro
-    post_start:
-      - command: chown -R app:app /app/data
-        user: root
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:17
+    restart: always
+    ports:
+      - 5432:5432
+    volumes:
+      - jetstream-psql:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=deefyksb
+      - POSTGRES_USER=bskyfeed
+      - POSTGRES_DB=bskyfeed
 
 volumes:
-  jetstream-db:
+  jetstream-psql:

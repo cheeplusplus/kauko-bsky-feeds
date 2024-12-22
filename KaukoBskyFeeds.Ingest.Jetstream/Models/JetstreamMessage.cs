@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 using KaukoBskyFeeds.Shared.Bsky;
 
 namespace KaukoBskyFeeds.Ingest.Jetstream.Models;
@@ -24,7 +23,7 @@ public class JetstreamMessage
 
     [JsonIgnore]
     public DateTime MessageTime =>
-        DateTimeOffset.FromUnixTimeMilliseconds(TimeMicroseconds / 1000).DateTime;
+        DateTimeOffset.FromUnixTimeMilliseconds(TimeMicroseconds / 1000).DateTime.AsUTC();
 
     public string ToAtUri()
     {

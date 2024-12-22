@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
 namespace KaukoBskyFeeds.Db.Models;
@@ -6,7 +7,7 @@ namespace KaukoBskyFeeds.Db.Models;
 [PrimaryKey(nameof(LikeDid), nameof(LikeRkey))]
 [Index(nameof(ParentDid), nameof(ParentRkey))]
 [Index(nameof(EventTime))]
-public class PostLike
+public class PostLike : IPostInteraction
 {
     [Required]
     public required string LikeDid { get; set; }
@@ -25,4 +26,10 @@ public class PostLike
 
     [Required]
     public long EventTimeUs { get; set; }
+
+    [NotMapped]
+    public PostRecordRef Ref => new(LikeDid, LikeRkey);
+
+    [NotMapped]
+    public PostRecordRef ParentRef => new(ParentDid, ParentRkey);
 }
