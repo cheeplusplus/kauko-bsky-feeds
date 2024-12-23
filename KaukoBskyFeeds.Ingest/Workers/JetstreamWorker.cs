@@ -12,32 +12,23 @@ using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Ingest.Workers;
 
-public class JetstreamWorker : IHostedService
+public class JetstreamWorker(
+    ILogger<JetstreamWorker> logger,
+    IConfiguration configuration,
+    IHostApplicationLifetime lifetime,
+    FeedDbContext db,
+    IJetstreamConsumer consumer
+) : IHostedService
 {
-    private readonly ILogger<JetstreamWorker> _logger;
-    private readonly FeedDbContext _db;
-    private readonly IJetstreamConsumer _consumer;
-    private readonly bool _consumeFromHistoricFeed = false;
+    private readonly bool _consumeFromHistoricFeed = configuration.GetValue<bool>(
+        "IngestConfig:ConsumeHistoricFeed"
+    );
     private readonly CancellationTokenSource _readCancel = new();
     private DateTime _lastSave = DateTime.MinValue;
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
     private int _saveFailureCount = 0;
-    private readonly BulkInsertHolder _insertHolder;
-
-    public JetstreamWorker(
-        ILogger<JetstreamWorker> logger,
-        IConfiguration configuration,
-        FeedDbContext db,
-        IJetstreamConsumer consumer
-    )
-    {
-        _logger = logger;
-        _consumeFromHistoricFeed = configuration.GetValue<bool>("IngestConfig:ConsumeHistoricFeed");
-        _db = db;
-        _consumer = consumer;
-        _insertHolder = new BulkInsertHolder(db);
-    }
+    private readonly BulkInsertHolder _insertHolder = new BulkInsertHolder(db);
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -45,7 +36,7 @@ public class JetstreamWorker : IHostedService
         _ = Task.Run(() => ReadChannel(_readCancel.Token), cancellationToken);
 
         // Start consuming
-        await _consumer.Start(FetchLatestCursor, cancellationToken: cancellationToken);
+        await consumer.Start(FetchLatestCursor, cancellationToken: cancellationToken);
 
         // Start the timer for cleanup
         _lastCleanup = DateTime.Now + TimeSpan.FromSeconds(30); // Delay 30s
@@ -53,7 +44,7 @@ public class JetstreamWorker : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _consumer.Stop();
+        await consumer.Stop();
         await _readCancel.CancelAsync(); // cancel after complete - may not be needed or should be later in the lifecycle
         await CommitDb(cancellationToken); // make sure we're up to date before leaving
     }
@@ -67,17 +58,17 @@ public class JetstreamWorker : IHostedService
         }
         else
         {
-            var _cursorEvent = _db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
+            var _cursorEvent = db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
             if (_cursorEvent == null)
             {
                 if (_consumeFromHistoricFeed)
                 {
-                    _logger.LogInformation("No events found, starting from earliest available");
+                    logger.LogInformation("No events found, starting from earliest available");
                     return 0;
                 }
                 else
                 {
-                    _logger.LogInformation("No events found, starting from now");
+                    logger.LogInformation("No events found, starting from now");
                     return null;
                 }
             }
@@ -88,7 +79,7 @@ public class JetstreamWorker : IHostedService
         }
 
         var offset = timeUs - ((long)TimeSpan.FromSeconds(1).TotalMicroseconds);
-        _logger.LogInformation(
+        logger.LogInformation(
             "Events found, resuming stream from {lastEventTime} ({offset})",
             timeUs,
             offset
@@ -101,9 +92,9 @@ public class JetstreamWorker : IHostedService
         try
         {
             // Continously consume from the channel until cancelled
-            while (await _consumer.ChannelReader.WaitToReadAsync(cancellationToken))
+            while (await consumer.ChannelReader.WaitToReadAsync(cancellationToken))
             {
-                while (_consumer.ChannelReader.TryRead(out var msg))
+                while (consumer.ChannelReader.TryRead(out var msg))
                 {
                     try
                     {
@@ -112,7 +103,7 @@ public class JetstreamWorker : IHostedService
                     catch (Exception ex)
                     {
                         // Continue and just drop the message, for now
-                        _logger.LogError(
+                        logger.LogError(
                             ex,
                             "Encountered exception inside message writer on message {uri}",
                             msg.ToAtUri()
@@ -143,7 +134,7 @@ public class JetstreamWorker : IHostedService
                         }
 
                         // Continue and try again next time
-                        _logger.LogError(
+                        logger.LogError(
                             ex,
                             "Encountered exception saving during message {uri}",
                             msg.ToAtUri()
@@ -154,7 +145,10 @@ public class JetstreamWorker : IHostedService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to read from channel");
+            logger.LogError(ex, "Failed to read from channel");
+
+            // This should be considered a fatal error at this point
+            lifetime.StopApplication();
         }
     }
 
@@ -163,13 +157,13 @@ public class JetstreamWorker : IHostedService
         // Save every 10 seconds
         if (DateTime.Now - TimeSpan.FromSeconds(10) > _lastSave)
         {
-            _logger.LogDebug("Committing to disk...");
+            logger.LogDebug("Committing to disk...");
             var saveCount = await CommitDb(cancellationToken);
 
             // Log on us catching up if we're behind
             if (_lastSaveMarker < (DateTime.UtcNow - TimeSpan.FromSeconds(60)))
             {
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Catching up, {timespan} behind ({writes:N} writes/s)",
                     DateTime.UtcNow - lastMessage.MessageTime,
                     saveCount / (DateTime.Now - _lastSave).TotalSeconds
@@ -183,24 +177,24 @@ public class JetstreamWorker : IHostedService
         // Clean up every 10 minutes
         if (DateTime.Now - TimeSpan.FromMinutes(10) > _lastCleanup)
         {
-            _logger.LogInformation("Performing db cleanup");
+            logger.LogInformation("Performing db cleanup");
             var threeDaysAgo = DateTime.UtcNow - TimeSpan.FromDays(3);
 
-            using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+            using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-            var count1 = await _db
+            var count1 = await db
                 .Posts.Where(s => s.EventTime < threeDaysAgo)
                 .ExecuteDeleteAsync(cancellationToken);
-            var count2 = await _db
+            var count2 = await db
                 .PostLikes.Where(s => s.EventTime < threeDaysAgo)
                 .ExecuteDeleteAsync(cancellationToken);
-            var count3 = await _db
+            var count3 = await db
                 .PostQuotePosts.Where(s => s.EventTime < threeDaysAgo)
                 .ExecuteDeleteAsync(cancellationToken);
-            var count4 = await _db
+            var count4 = await db
                 .PostReplies.Where(s => s.EventTime < threeDaysAgo)
                 .ExecuteDeleteAsync(cancellationToken);
-            var count5 = await _db
+            var count5 = await db
                 .PostReposts.Where(s => s.EventTime < threeDaysAgo)
                 .ExecuteDeleteAsync(cancellationToken);
             var count = count1 + count2 + count3 + count4 + count5;
@@ -208,7 +202,7 @@ public class JetstreamWorker : IHostedService
             await transaction.CommitAsync(cancellationToken);
 
             _lastCleanup = DateTime.Now;
-            _logger.LogInformation("Cleanup complete, {count} records pruned", count);
+            logger.LogInformation("Cleanup complete, {count} records pruned", count);
         }
     }
 
@@ -254,7 +248,7 @@ public class JetstreamWorker : IHostedService
         else
         {
             // TODO: Support updates
-            _logger.LogTrace(
+            logger.LogTrace(
                 "Unsupported message operation {op} on {postUri}",
                 message.Commit.Operation,
                 message.ToAtUri()
@@ -290,7 +284,7 @@ public class JetstreamWorker : IHostedService
         else
         {
             // TODO: Support updates
-            _logger.LogTrace(
+            logger.LogTrace(
                 "Unsupported message operation {op} on {postUri}",
                 message.Commit.Operation,
                 message.ToAtUri()
@@ -327,7 +321,7 @@ public class JetstreamWorker : IHostedService
         else
         {
             // TODO: Support updates
-            _logger.LogTrace(
+            logger.LogTrace(
                 "Unsupported message operation {op} on {postUri}",
                 message.Commit.Operation,
                 message.ToAtUri()
@@ -338,7 +332,7 @@ public class JetstreamWorker : IHostedService
     private async Task<int> CommitDb(CancellationToken cancellationToken = default)
     {
         var (upserts, deletes) = await _insertHolder.Commit(cancellationToken);
-        _logger.LogDebug(
+        logger.LogDebug(
             "Committed {upserts} writes and {deletes} deletes to disk",
             upserts,
             deletes
