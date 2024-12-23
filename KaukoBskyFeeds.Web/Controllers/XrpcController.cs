@@ -1,7 +1,5 @@
 using FishyFlip;
-using FishyFlip.Models;
 using KaukoBskyFeeds.Feeds.Registry;
-using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -15,14 +13,9 @@ public class XrpcController(
     ILogger<XrpcController> logger,
     IConfiguration configuration,
     FeedRegistry feedRegistry,
-    ATProtocol proto
-) : ControllerBase
+    ATProtocol _proto
+) : BskyControllerBase(configuration, _proto)
 {
-    private readonly BskyConfigBlock bskyConfig =
-        configuration.GetSection("BskyConfig").Get<BskyConfigBlock>()
-        ?? throw new Exception("Failed to read configuration");
-    private Session? _session;
-
     [HttpGet("app.bsky.feed.getFeedSkeleton")]
     public async Task<
         Results<NotFound, UnauthorizedHttpResult, Ok<CustomSkeletonFeed>>
@@ -45,18 +38,18 @@ public class XrpcController(
         var requestingDid = BskyAuth.GetDidFromAuthHeader(
             authorization,
             "app.bsky.feed.getFeedSkeleton",
-            bskyConfig.Identity.ServiceDid
+            BskyConfig.Identity.ServiceDid
         );
 
         // Attempt login on first fetch
         await EnsureLogin(cancellationToken);
-        if (_session == null)
+        if (Session == null)
         {
             throw new Exception("Not logged in!");
         }
 
         // Handle feed owner restriction
-        if (feedInstance.Config.RestrictToFeedOwner && requestingDid != _session?.Did)
+        if (feedInstance.Config.RestrictToFeedOwner && requestingDid != Session?.Did)
         {
             return TypedResults.Unauthorized();
         }
@@ -90,24 +83,9 @@ public class XrpcController(
     public DescribeFeedGeneratorResponse DescribeFeedGenerator()
     {
         return new DescribeFeedGeneratorResponse(
-            bskyConfig.Identity.ServiceDid,
+            BskyConfig.Identity.ServiceDid,
             feedRegistry.AllFeedUris.Select(s => new DescribeFeedGeneratorFeed(s))
         );
-    }
-
-    private async Task EnsureLogin(CancellationToken cancellationToken = default)
-    {
-        if (_session == null || !proto.IsAuthenticated)
-        {
-            _session =
-                proto.Session
-                ?? await proto.AuthenticateWithPasswordAsync(
-                    bskyConfig.Auth.Username,
-                    bskyConfig.Auth.Password,
-                    cancellationToken: cancellationToken
-                )
-                ?? throw new Exception("Failed to login");
-        }
     }
 
     public record DescribeFeedGeneratorFeed(string Uri);
