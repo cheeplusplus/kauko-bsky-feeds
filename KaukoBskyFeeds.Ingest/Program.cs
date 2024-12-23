@@ -30,7 +30,13 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
     }
 
     // db.EnableSensitiveDataLogging();
-    options.ConfigureWarnings(b => b.Log((RelationalEventId.CommandExecuted, LogLevel.Trace)));
+    options.ConfigureWarnings(b =>
+    {
+        b.Log((RelationalEventId.CommandExecuted, LogLevel.Trace));
+
+        // Ignore until https://github.com/dotnet/efcore/issues/35382 is fixed
+        b.Ignore(RelationalEventId.PendingModelChangesWarning);
+    });
 });
 
 // builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
