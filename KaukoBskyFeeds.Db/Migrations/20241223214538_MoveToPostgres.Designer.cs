@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KaukoBskyFeeds.Db.Migrations
 {
     [DbContext(typeof(FeedDbContext))]
-    [Migration("20241219082320_MoveToPsql")]
-    partial class MoveToPsql
+    [Migration("20241223214538_MoveToPostgres")]
+    partial class MoveToPostgres
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -37,11 +37,20 @@ namespace KaukoBskyFeeds.Db.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("EmbedRecordUri")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EmbedType")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("EventTime")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long>("EventTimeUs")
                         .HasColumnType("bigint");
+
+                    b.Property<int>("ImageCount")
+                        .HasColumnType("integer");
 
                     b.PrimitiveCollection<List<string>>("Langs")
                         .HasColumnType("text[]");
@@ -188,60 +197,63 @@ namespace KaukoBskyFeeds.Db.Migrations
                     b.ToTable("PostReposts");
                 });
 
-            modelBuilder.Entity("KaukoBskyFeeds.Db.Models.Post", b =>
+            modelBuilder.Entity("KaukoBskyFeeds.Db.Models.PostWithInteractions", b =>
                 {
-                    b.OwnsOne("KaukoBskyFeeds.Db.Models.PostEmbeds", "Embeds", b1 =>
-                        {
-                            b1.Property<string>("PostDid")
-                                .HasColumnType("text");
+                    b.Property<string>("Did")
+                        .HasColumnType("text");
 
-                            b1.Property<string>("PostRkey")
-                                .HasColumnType("text");
+                    b.Property<string>("Rkey")
+                        .HasColumnType("text");
 
-                            b1.Property<string>("RecordUri")
-                                .HasColumnType("text");
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
-                            b1.HasKey("PostDid", "PostRkey");
+                    b.Property<string>("EmbedRecordUri")
+                        .HasColumnType("text");
 
-                            b1.ToTable("Posts");
+                    b.Property<string>("EmbedType")
+                        .HasColumnType("text");
 
-                            b1.ToJson("Embeds");
+                    b.Property<DateTime>("EventTime")
+                        .HasColumnType("timestamp with time zone");
 
-                            b1.WithOwner()
-                                .HasForeignKey("PostDid", "PostRkey");
+                    b.Property<long>("EventTimeUs")
+                        .HasColumnType("bigint");
 
-                            b1.OwnsMany("KaukoBskyFeeds.Db.Models.PostEmbedImage", "Images", b2 =>
-                                {
-                                    b2.Property<string>("PostEmbedsPostDid")
-                                        .HasColumnType("text");
+                    b.Property<int>("ImageCount")
+                        .HasColumnType("integer");
 
-                                    b2.Property<string>("PostEmbedsPostRkey")
-                                        .HasColumnType("text");
+                    b.PrimitiveCollection<List<string>>("Langs")
+                        .HasColumnType("text[]");
 
-                                    b2.Property<int>("__synthesizedOrdinal")
-                                        .ValueGeneratedOnAdd()
-                                        .HasColumnType("integer");
+                    b.Property<int>("LikeCount")
+                        .HasColumnType("integer");
 
-                                    b2.Property<string>("MimeType")
-                                        .IsRequired()
-                                        .HasColumnType("text");
+                    b.Property<int>("QuotePostCount")
+                        .HasColumnType("integer");
 
-                                    b2.Property<string>("RefLink")
-                                        .IsRequired()
-                                        .HasColumnType("text");
+                    b.Property<int>("ReplyCount")
+                        .HasColumnType("integer");
 
-                                    b2.HasKey("PostEmbedsPostDid", "PostEmbedsPostRkey", "__synthesizedOrdinal");
+                    b.Property<string>("ReplyParentUri")
+                        .HasColumnType("text");
 
-                                    b2.ToTable("Posts");
+                    b.Property<string>("ReplyRootUri")
+                        .HasColumnType("text");
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("PostEmbedsPostDid", "PostEmbedsPostRkey");
-                                });
+                    b.Property<int>("RepostCount")
+                        .HasColumnType("integer");
 
-                            b1.Navigation("Images");
-                        });
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)");
 
-                    b.Navigation("Embeds");
+                    b.HasKey("Did", "Rkey");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("PostsWithInteractions", (string)null);
                 });
 #pragma warning restore 612, 618
         }

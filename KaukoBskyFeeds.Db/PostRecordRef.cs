@@ -1,6 +1,6 @@
 namespace KaukoBskyFeeds.Db;
 
-interface IPostRecord
+public interface IPostRecord
 {
     PostRecordRef Ref { get; }
     DateTime EventTime { get; }

@@ -193,6 +193,65 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.ToTable("PostReposts");
                 });
+
+            modelBuilder.Entity("KaukoBskyFeeds.Db.Models.PostWithInteractions", b =>
+                {
+                    b.Property<string>("Did")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Rkey")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EmbedRecordUri")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EmbedType")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("EventTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("EventTimeUs")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ImageCount")
+                        .HasColumnType("integer");
+
+                    b.PrimitiveCollection<List<string>>("Langs")
+                        .HasColumnType("text[]");
+
+                    b.Property<int>("LikeCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuotePostCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ReplyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReplyParentUri")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReplyRootUri")
+                        .HasColumnType("text");
+
+                    b.Property<int>("RepostCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)");
+
+                    b.HasKey("Did", "Rkey");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("PostsWithInteractions", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
@@ -38,7 +39,7 @@ public static class PostExtensions
         return q;
     }
 
-    public static string GetCursor(this Post post)
+    public static string GetCursor(this IPostRecord post)
     {
         return AsCursor(post.EventTime);
     }
@@ -48,32 +49,32 @@ public static class PostExtensions
         return dt.ToString("o", CultureInfo.InvariantCulture);
     }
 
-    public static string ToUri(this Post post)
+    public static string ToUri(this IPostRecord post)
     {
-        return $"at://{post.Did}/{BskyConstants.COLLECTION_TYPE_POST}/{post.Rkey}";
+        return $"at://{post.Ref.Did}/{BskyConstants.COLLECTION_TYPE_POST}/{post.Ref.Rkey}";
     }
 
-    public static ATUri ToAtUri(this Post post)
+    public static ATUri ToAtUri(this IPostRecord post)
     {
         return ATUri.Create(ToUri(post));
     }
 
-    public static ATDid GetAuthorDid(this Post post)
+    public static ATDid GetAuthorDid(this IPostRecord post)
     {
-        return ATDid.Create(post.Did) ?? throw new Exception("Failed to convert DID from Post");
+        return ATDid.Create(post.Ref.Did) ?? throw new Exception("Failed to convert DID from Post");
     }
 
-    public static ATDid? GetReplyParentDid(this Post post)
+    public static ATDid? GetReplyParentDid(this BasePost post)
     {
         return GetDidFromAtUri(post.ReplyParentUri);
     }
 
-    public static ATDid? GetReplyRootDid(this Post post)
+    public static ATDid? GetReplyRootDid(this BasePost post)
     {
         return GetDidFromAtUri(post.ReplyRootUri);
     }
 
-    public static ATDid? GetEmbedRecordDid(this Post post)
+    public static ATDid? GetEmbedRecordDid(this BasePost post)
     {
         return GetDidFromAtUri(post.EmbedRecordUri);
     }

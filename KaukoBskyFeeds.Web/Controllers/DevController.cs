@@ -159,7 +159,7 @@ public class DevController(
         return TypedResults.Json(resp);
     }
 
-    public record CachedPostResponse(string AtUri, Db.Models.Post Post, long TotalInteractions);
+    public record CachedPostResponse(string AtUri, IPostRecord Post, long TotalInteractions);
 
     [HttpGet("install")]
     public async Task<Results<NotFound, Ok<string>>> Install(

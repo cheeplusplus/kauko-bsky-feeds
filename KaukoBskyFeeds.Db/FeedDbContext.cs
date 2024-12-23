@@ -21,6 +21,7 @@ public class FeedDbContext(DbContextOptions<FeedDbContext> options) : DbContext(
         builder
             .Entity<PostWithInteractions>()
             .HasBaseType((Type?)null)
-            .ToView("PostsWithInteractions");
+            .ToView("PostsWithInteractions")
+            .HasKey(k => new { k.Did, k.Rkey });
     }
 }

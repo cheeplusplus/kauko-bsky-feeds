@@ -5,9 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace KaukoBskyFeeds.Db.Models;
 
-[PrimaryKey(nameof(Did), nameof(Rkey))]
-[Index(nameof(EventTime))]
-public class Post : IPostRecord
+public abstract class BasePost : IPostRecord
 {
     [Required]
     public required string Did { get; set; }
@@ -42,6 +40,10 @@ public class Post : IPostRecord
     [NotMapped]
     public PostRecordRef Ref => new(Did, Rkey);
 }
+
+[PrimaryKey(nameof(Did), nameof(Rkey))]
+[Index(nameof(EventTime))]
+public class Post : BasePost { }
 
 public class PostEmbeds
 {

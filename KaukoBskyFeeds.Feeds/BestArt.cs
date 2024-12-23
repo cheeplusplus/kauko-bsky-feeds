@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
@@ -127,10 +126,10 @@ public class BestArt(
         return new CustomSkeletonFeed(feedOutput.ToList(), null);
     }
 
-    record PostIdealizer(Post Post, long InteractionCount)
+    record PostIdealizer(IPostRecord Post, long InteractionCount)
     {
         public ATDid AuthorDid => Post.GetAuthorDid();
     }
 
-    record SortedFeedResult(Post Post, float Score);
+    record SortedFeedResult(IPostRecord Post, float Score);
 }
