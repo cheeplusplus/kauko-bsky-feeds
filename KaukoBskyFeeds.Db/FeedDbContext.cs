@@ -12,8 +12,6 @@ public class FeedDbContext(DbContextOptions<FeedDbContext> options) : DbContext(
     public required DbSet<PostRepost> PostReposts { get; set; }
     public required DbSet<PostWithInteractions> PostsWithInteractions { get; set; }
 
-    // The following configures EF to create a Sqlite database file in the
-    // special "local" folder for your platform.
     protected override void OnConfiguring(DbContextOptionsBuilder options) { }
 
     protected override void OnModelCreating(ModelBuilder builder)

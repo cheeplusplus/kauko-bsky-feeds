@@ -19,16 +19,8 @@ builder.Services.Configure<JsonOptions>(options =>
 
 builder.Services.AddDbContext<FeedDbContext>(options =>
 {
-    if (builder.Configuration.GetValue<string>("BskyConfig:Db:Provider") == "postgres")
-    {
-        var connStr = builder.Configuration.GetConnectionString("psqldb");
-        options.UseNpgsql(connStr);
-    }
-    else
-    {
-        var dbPath = Path.Join(dataPath.DbDir, "jetstream.db");
-        options.UseSqlite($"Data Source={dbPath}");
-    }
+    var connStr = builder.Configuration.GetConnectionString("psqldb");
+    options.UseNpgsql(connStr);
 });
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IBskyCache, BskyCache>();

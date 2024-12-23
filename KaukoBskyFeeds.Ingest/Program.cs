@@ -18,16 +18,8 @@ builder.Configuration.AddJsonFile(ingestDataPath.ConfigPath);
 
 builder.Services.AddDbContext<FeedDbContext>(options =>
 {
-    if (builder.Configuration.GetValue<string>("BskyConfig:Db:Provider") == "postgres")
-    {
-        var connStr = builder.Configuration.GetConnectionString("psqldb");
-        options.UseNpgsql(connStr);
-    }
-    else
-    {
-        var dbPath = Path.Join(bskyDataPath.DbDir, "jetstream.db");
-        options.UseSqlite($"Data Source={dbPath}");
-    }
+    var connStr = builder.Configuration.GetConnectionString("psqldb");
+    options.UseNpgsql(connStr);
 
     // db.EnableSensitiveDataLogging();
     options.ConfigureWarnings(b =>
