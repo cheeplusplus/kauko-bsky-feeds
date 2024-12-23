@@ -23,7 +23,7 @@ public static class IngestExtensions
             EventTimeUs = post.TimeMicroseconds,
             CreatedAt = record.CreatedAt.AsUTC(),
             Langs = record.Langs,
-            Text = record.Text,
+            Text = record.Text.Replace("\0", string.Empty),
             ReplyParentUri = record.Reply?.Parent?.Uri,
             ReplyRootUri = record.Reply?.Root?.Uri,
             EmbedType = record.Embed?.GetRecordType(),

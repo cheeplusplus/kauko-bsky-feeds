@@ -22,6 +22,7 @@ public class JetstreamWorker : IHostedService
     private DateTime _lastSave = DateTime.MinValue;
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
+    private int _saveFailureCount = 0;
     private readonly BulkInsertHolder _insertHolder;
 
     public JetstreamWorker(
@@ -106,7 +107,22 @@ public class JetstreamWorker : IHostedService
                 {
                     try
                     {
-                        await HandleMessage(msg, cancellationToken);
+                        HandleMessage(msg);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Continue and just drop the message, for now
+                        _logger.LogError(
+                            ex,
+                            "Encountered exception inside message writer on message {uri}",
+                            msg.ToAtUri()
+                        );
+                    }
+
+                    try
+                    {
+                        await TrySave(msg, cancellationToken);
+                        _saveFailureCount = 0;
                     }
                     catch (ObjectDisposedException)
                     {
@@ -119,10 +135,17 @@ public class JetstreamWorker : IHostedService
                     }
                     catch (Exception ex)
                     {
-                        // Continue and just drop the message, for now
+                        // Handle too many repeated failures
+                        _saveFailureCount++;
+                        if (_saveFailureCount > 3)
+                        {
+                            throw new Exception("Too many failures trying to save");
+                        }
+
+                        // Continue and try again next time
                         _logger.LogError(
                             ex,
-                            "Encountered exception inside message writer on message {uri}",
+                            "Encountered exception saving during message {uri}",
                             msg.ToAtUri()
                         );
                     }
@@ -135,21 +158,8 @@ public class JetstreamWorker : IHostedService
         }
     }
 
-    private async Task HandleMessage(JetstreamMessage message, CancellationToken cancellationToken)
+    private async Task TrySave(JetstreamMessage lastMessage, CancellationToken cancellationToken)
     {
-        if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_POST)
-        {
-            HandleMessage_Post(message);
-        }
-        else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_LIKE)
-        {
-            HandleMessage_Like(message);
-        }
-        else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_REPOST)
-        {
-            HandleMessage_Repost(message);
-        }
-
         // Save every 10 seconds
         if (DateTime.Now - TimeSpan.FromSeconds(10) > _lastSave)
         {
@@ -161,13 +171,13 @@ public class JetstreamWorker : IHostedService
             {
                 _logger.LogInformation(
                     "Catching up, {timespan} behind ({writes:N} writes/s)",
-                    DateTime.UtcNow - message.MessageTime,
+                    DateTime.UtcNow - lastMessage.MessageTime,
                     saveCount / (DateTime.Now - _lastSave).TotalSeconds
                 );
             }
 
             _lastSave = DateTime.Now;
-            _lastSaveMarker = message.MessageTime;
+            _lastSaveMarker = lastMessage.MessageTime;
         }
 
         // Clean up every 10 minutes
@@ -199,6 +209,22 @@ public class JetstreamWorker : IHostedService
 
             _lastCleanup = DateTime.Now;
             _logger.LogInformation("Cleanup complete, {count} records pruned", count);
+        }
+    }
+
+    private void HandleMessage(JetstreamMessage message)
+    {
+        if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_POST)
+        {
+            HandleMessage_Post(message);
+        }
+        else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_LIKE)
+        {
+            HandleMessage_Like(message);
+        }
+        else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_REPOST)
+        {
+            HandleMessage_Repost(message);
         }
     }
 
