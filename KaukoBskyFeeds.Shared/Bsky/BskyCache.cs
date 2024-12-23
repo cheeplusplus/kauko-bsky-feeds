@@ -23,14 +23,20 @@ public interface IBskyCache
         ATUri listUri,
         CancellationToken cancellationToken = default
     );
+    Task<FeedProfile?> GetProfile(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCache
 {
-    private static readonly TimeSpan CACHE_DURATION = TimeSpan.FromMinutes(10);
-
-    private readonly ILogger<BskyCache> _logger = logger;
-    private readonly IMemoryCache _cache = cache;
+    public static readonly TimeSpan CACHE_DURATION = TimeSpan.FromMinutes(10);
+    public static readonly MemoryCacheEntryOptions DEFAULT_OPTS = new()
+    {
+        AbsoluteExpirationRelativeToNow = CACHE_DURATION,
+    };
 
     public async Task<IEnumerable<ATDid>> GetFollowing(
         ATProtocol proto,
@@ -43,13 +49,11 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCac
             throw new NotLoggedInException();
         }
 
-        return await _cache.GetOrCreateAsync(
+        return await cache.GetOrCreateAsync(
                 $"user_{user}_following",
-                async (cacheEntry) =>
+                async (_) =>
                 {
-                    cacheEntry.AbsoluteExpirationRelativeToNow = CACHE_DURATION;
-
-                    _logger.LogDebug("Fetching user {listUri} following", user);
+                    logger.LogDebug("Fetching user {listUri} following", user);
                     return (
                         await BskyExtensions.GetAllResults(
                             async (cursor, ct) =>
@@ -65,7 +69,8 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCac
                             cancellationToken
                         )
                     ).Select(s => s.Did).ToList();
-                }
+                },
+                DEFAULT_OPTS
             ) ?? [];
     }
 
@@ -80,13 +85,11 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCac
             throw new NotLoggedInException();
         }
 
-        return await _cache.GetOrCreateAsync(
+        return await cache.GetOrCreateAsync(
                 $"user_{user}_followers",
-                async (cacheEntry) =>
+                async (_) =>
                 {
-                    cacheEntry.AbsoluteExpirationRelativeToNow = CACHE_DURATION;
-
-                    _logger.LogDebug("Fetching user {listUri} followers", user);
+                    logger.LogDebug("Fetching user {listUri} followers", user);
                     return (
                         await BskyExtensions.GetAllResults(
                             async (cursor, ct) =>
@@ -102,7 +105,8 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCac
                             cancellationToken
                         )
                     ).Select(s => s.Did).ToList();
-                }
+                },
+                DEFAULT_OPTS
             ) ?? [];
     }
 
@@ -117,13 +121,11 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCac
             throw new NotLoggedInException();
         }
 
-        return await _cache.GetOrCreateAsync(
+        return await cache.GetOrCreateAsync(
                 $"list_{listUri}_members",
-                async (cacheEntry) =>
+                async (_) =>
                 {
-                    cacheEntry.AbsoluteExpirationRelativeToNow = CACHE_DURATION;
-
-                    _logger.LogDebug("Fetching list {listUri} members list", listUri);
+                    logger.LogDebug("Fetching list {listUri} members list", listUri);
                     var listMembers = await BskyExtensions.GetAllResults(
                         async (cursor, ct) =>
                         {
@@ -145,7 +147,31 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCac
                         .ToList();
 
                     return listMemberDids;
-                }
+                },
+                DEFAULT_OPTS
             ) ?? [];
+    }
+
+    public async Task<FeedProfile?> GetProfile(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (proto?.Session == null)
+        {
+            throw new NotLoggedInException();
+        }
+
+        return await cache.GetOrCreateAsync(
+            $"user_{user}_profile",
+            async (_) =>
+            {
+                logger.LogDebug("Fetching user {user} profile", user);
+                var profileRes = await proto.Actor.GetProfileAsync(user, cancellationToken);
+                return profileRes.HandleResult();
+            },
+            DEFAULT_OPTS
+        );
     }
 }

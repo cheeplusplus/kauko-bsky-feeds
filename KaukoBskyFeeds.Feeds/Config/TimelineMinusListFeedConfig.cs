@@ -1,4 +1,3 @@
-using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using KaukoBskyFeeds.Shared;
 
@@ -10,7 +9,6 @@ public record TimelineMinusListFeedConfig(
     string ListUri,
     List<string>? AlwaysShowListUser = null,
     List<string>? MuteUsers = null,
-    bool RestrictToFeedOwner = true,
     bool ShowSelfPosts = true,
     [property: JsonConverter(typeof(JsonStringEnumConverter<ShowRepliesSetting>))]
         ShowRepostsSetting ShowReposts = ShowRepostsSetting.All,

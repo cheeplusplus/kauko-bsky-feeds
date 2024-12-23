@@ -10,10 +10,29 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 9.0.x
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
         run: dotnet build --no-restore
       # - name: Test
       #   run: dotnet test --no-build --verbosity normal
+
+  publish:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+    needs: dotnet
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Publish
+        run: ContainerImageTags="${BRANCH_NAME/\//-};latest" dotnet publish --os linux --arch x64 /t:PublishContainer
+        env:
+          BRANCH_NAME: "${{github.ref_name}}"
+          DOTNET_CONTAINER_REGISTRY_UNAME: "${{ github.actor }}"
+          DOTNET_CONTAINER_REGISTRY_PWORD: "${{ github.token }}"

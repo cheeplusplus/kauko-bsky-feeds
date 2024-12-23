@@ -46,10 +46,7 @@
                         "properties": {
                             "Type": {
                                 "description": "FeedProcessor class name",
-                                "type": "string",
-                                "enum": [
-                                    "TimelineMinusList"
-                                ]
+                                "type": "string"
                             },
                             "Config": {
                                 "description": "FeedProcessor configuration",
@@ -62,6 +59,10 @@
                                     "Description": {
                                         "description": "Published list description",
                                         "type": "string"
+                                    },
+                                    "RestrictToFeedOwner": {
+                                        "description": "Restrict to the feed owner?",
+                                        "type": "boolean"
                                     }
                                 },
                                 "required": [
@@ -77,6 +78,12 @@
                         "oneOf": [
                             {
                                 "$ref": "#/definitions/FeedProcessorTimelineMinusList"
+                            },
+                            {
+                                "$ref": "#/definitions/FeedProcessorListImagesOnly"
+                            },
+                            {
+                                "$ref": "#/definitions/FeedProcessorBestArt"
                             }
                         ]
                     },
@@ -137,11 +144,6 @@
                                 "$ref": "#/definitions/didDocument"
                             }
                         },
-                        "RestrictToFeedOwner": {
-                            "description": "Restrict to the feed owner?",
-                            "type": "boolean",
-                            "default": true
-                        },
                         "ShowSelfPosts": {
                             "description": "Show self posts?",
                             "type": "boolean",
@@ -188,6 +190,49 @@
                         "ListUri",
                         "AlwaysShowListUser"
                     ]
+                }
+            }
+        },
+        "FeedProcessorListImagesOnly": {
+            "type": "object",
+            "properties": {
+                "Type": {
+                    "type": "string",
+                    "const": "ListImagesOnly"
+                },
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "ListUri": {
+                            "description": "List URI used for filtering",
+                            "$ref": "#/definitions/atUriForList"
+                        }
+                    },
+                    "required": [
+                        "ListUri"
+                    ]
+                }
+            }
+        },
+        "FeedProcessorBestArt": {
+            "type": "object",
+            "properties": {
+                "Type": {
+                    "type": "string",
+                    "const": "BestArt"
+                },
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "BalanceInteractions": {
+                            "description": "Balance interactions to follower count?",
+                            "type": "boolean"
+                        },
+                        "RestrictToListUri": {
+                            "description": "Optional list URI used for filtering",
+                            "$ref": "#/definitions/atUriForList"
+                        }
+                    }
                 }
             }
         }

@@ -10,7 +10,7 @@
             "request": "launch",
             "preLaunchTask": "build",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/KaukoBskyFeeds.Web/bin/Debug/net8.0/KaukoBskyFeeds.Web.dll",
+            "program": "${workspaceFolder}/KaukoBskyFeeds.Web/bin/Debug/net9.0/KaukoBskyFeeds.Web.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,

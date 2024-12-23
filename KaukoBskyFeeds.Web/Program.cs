@@ -1,42 +1,34 @@
 using FishyFlip;
+using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Bleh: we may need to step up a directory to find the config file
-var bskyConfigFilename = "bsky.config.json";
-var bskyConfigPath = Path.Join(Directory.GetCurrentDirectory(), bskyConfigFilename);
-if (!File.Exists(bskyConfigPath))
-{
-    // Move up
-    var upOne = Path.Join(Directory.GetCurrentDirectory(), "..", bskyConfigFilename);
-    if (File.Exists(upOne))
-    {
-        bskyConfigPath = upOne;
-    }
-    else
-    {
-        throw new Exception("Couldn't find bsky.config.json");
-    }
-}
+var dataPath = BskyConfigExtensions.GetDataDir("bsky.config.json");
+builder.Configuration.AddJsonFile(dataPath.ConfigPath);
 
-builder.Configuration.AddJsonFile(bskyConfigPath);
 builder.Services.Configure<JsonOptions>(options =>
     options.SerializerOptions.DefaultIgnoreCondition =
         System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault
         | System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
 );
 
+builder.Services.AddDbContext<FeedDbContext>(options =>
+{
+    var connStr = builder.Configuration.GetConnectionString("psqldb");
+    options.UseNpgsql(connStr);
+});
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IBskyCache, BskyCache>();
 builder.Services.AddSingleton(f =>
 {
     var logger = f.GetService<ILogger<ATProtocol>>();
     return new ATProtocolBuilder().EnableAutoRenewSession(true).WithLogger(logger).Build();
 });
-builder.Services.AddSingleton<IBskyCache, BskyCache>();
 builder.Services.AddSingleton<FeedRegistry>();
 
 builder.Services.AddControllers();
