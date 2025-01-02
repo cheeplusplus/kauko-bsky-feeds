@@ -54,7 +54,7 @@ public class JetstreamWorker(
         long timeUs;
         if (_lastSaveMarker != null)
         {
-            timeUs = ((DateTimeOffset)_lastSaveMarker.Value).ToUnixTimeMilliseconds() * 1000;
+            timeUs = _lastSaveMarker.Value.ToMicroseconds();
         }
         else
         {

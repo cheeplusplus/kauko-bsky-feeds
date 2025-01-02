@@ -8,6 +8,12 @@
                 "bsky.config.json"
             ],
             "url": "./bsky.config.schema.json"
+        },
+        {
+            "fileMatch": [
+                "ingest.config.json"
+            ],
+            "url": "./ingest.config.schema.json"
         }
     ]
 }

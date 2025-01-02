@@ -7,6 +7,9 @@ public record TimelineMinusListFeedConfig(
     string DisplayName,
     string Description,
     string ListUri,
+    bool Install = false,
+    bool RestrictToFeedOwner = false,
+    bool FetchTimeline = false,
     List<string>? AlwaysShowListUser = null,
     List<string>? MuteUsers = null,
     bool ShowSelfPosts = true,
@@ -17,7 +20,7 @@ public record TimelineMinusListFeedConfig(
     [property: JsonConverter(typeof(JsonStringEnumConverter<ShowQuotePostsSetting>))]
         ShowQuotePostsSetting ShowQuotePosts = ShowQuotePostsSetting.All,
     bool IncludeListMutuals = false
-) : BaseFeedConfig(DisplayName, Description);
+) : BaseFeedConfig(DisplayName, Description, RestrictToFeedOwner, Install);
 
 public enum ShowRepostsSetting
 {

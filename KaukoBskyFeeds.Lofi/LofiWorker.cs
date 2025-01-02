@@ -51,9 +51,9 @@ public class LofiWorker(
 
         long? backfillCursor =
             _lofiConfig.BackfillMinutes.HasValue && _lofiConfig.BackfillMinutes.Value > 0
-                ? new DateTimeOffset(
+                ? (
                     DateTime.UtcNow - TimeSpan.FromMinutes(_lofiConfig.BackfillMinutes.Value)
-                ).ToUnixTimeMilliseconds() * 1000
+                ).ToMicroseconds()
                 : null;
 
         await jsc.Start(

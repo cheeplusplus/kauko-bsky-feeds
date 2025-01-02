@@ -20,7 +20,8 @@ public record BskyConfigFeedProcessor(string Type, BaseFeedConfig Config);
 public record BaseFeedConfig(
     string DisplayName,
     string Description,
-    bool RestrictToFeedOwner = false
+    bool RestrictToFeedOwner = false,
+    bool Install = false
 );
 
 public static class BskyConfigExtensions

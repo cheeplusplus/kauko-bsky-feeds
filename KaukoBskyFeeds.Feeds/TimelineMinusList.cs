@@ -1,6 +1,7 @@
 using System.Data;
 using FishyFlip;
 using FishyFlip.Models;
+using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
@@ -54,12 +55,28 @@ public class TimelineMinusList(
             cancellationToken
         );
 
-        var posts = await db
-            .Posts.LatestFromCursor(cursor)
-            .Where(w => followingListStr.Contains(w.Did))
-            // use a large limit - assume we need to fetch more than we're going to show
-            .Take(100)
-            .ToListAsync(cancellationToken);
+        List<Post> posts;
+        string? newCursor = null;
+        if (feedConfig.FetchTimeline)
+        {
+            var postTlRes = await proto.Feed.GetTimelineAsync(
+                cursor: cursor,
+                cancellationToken: cancellationToken
+            );
+            var postTl = postTlRes.HandleResult();
+            posts = postTl.Feed.Select(s => s.ToDbPost()).ToList();
+            newCursor = postTl.Cursor;
+        }
+        else
+        {
+            posts = await db
+                .Posts.LatestFromCursor(cursor)
+                .Where(w => followingListStr.Contains(w.Did))
+                // use a large limit - assume we need to fetch more than we're going to show
+                .Take(100)
+                .ToListAsync(cancellationToken);
+        }
+
         if (posts == null || posts.Count < 1 || cancellationToken.IsCancellationRequested)
         {
             return new CustomSkeletonFeed([], null);
@@ -95,7 +112,6 @@ public class TimelineMinusList(
         });
 
         var filteredFeed = judgedFeed.Where(w => w.Judgement.ShouldShow).Take(limit ?? 50);
-        var newCursor = filteredFeed.LastOrDefault()?.Cursor.AsCursor();
         var feedOutput = filteredFeed
             .Select(s => new CustomSkeletonFeedPost(
                 s.PostUri,
@@ -103,6 +119,8 @@ public class TimelineMinusList(
                 $"Reason: {s.Judgement.Type}"
             ))
             .ToList();
+
+        newCursor ??= filteredFeed.LastOrDefault()?.Cursor.AsCursor();
 
         return new CustomSkeletonFeed(feedOutput, newCursor);
     }

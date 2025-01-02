@@ -3,6 +3,7 @@
     "properties": {
         "BskyConfig": {
             "type": "object",
+            "additionalProperties": false,
             "properties": {
                 "Auth": {
                     "type": "object",
@@ -63,6 +64,10 @@
                                     "RestrictToFeedOwner": {
                                         "description": "Restrict to the feed owner?",
                                         "type": "boolean"
+                                    },
+                                    "Install": {
+                                        "description": "Install this feed?",
+                                        "type": "boolean"
                                     }
                                 },
                                 "required": [
@@ -95,6 +100,21 @@
                 "Identity",
                 "FeedProcessors"
             ]
+        },
+        "LofiConfig": {
+            "type": "object",
+            "properties": {
+                "CruiseOwnFeed": {
+                    "type": "boolean"
+                },
+                "HideRepliesToNotFollowing": {
+                    "type": "boolean"
+                },
+                "BackfillMinutes": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
         }
     },
     "required": [
@@ -129,6 +149,10 @@
                         "ListUri": {
                             "description": "List URI used for filtering",
                             "$ref": "#/definitions/atUriForList"
+                        },
+                        "FetchTimeline": {
+                            "description": "Fetch the timeline instead of using the cache",
+                            "type": "boolean"
                         },
                         "AlwaysShowListUser": {
                             "description": "List users to always show",

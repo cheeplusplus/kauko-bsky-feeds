@@ -22,8 +22,7 @@ public class JetstreamMessage
     public JetstreamCommit? Commit { get; set; }
 
     [JsonIgnore]
-    public DateTime MessageTime =>
-        DateTimeOffset.FromUnixTimeMilliseconds(TimeMicroseconds / 1000).DateTime.AsUTC();
+    public DateTime MessageTime => BskyExtensions.FromMicroseconds(TimeMicroseconds);
 
     public string ToAtUri()
     {

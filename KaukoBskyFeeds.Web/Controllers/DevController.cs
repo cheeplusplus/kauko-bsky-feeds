@@ -185,6 +185,10 @@ public class DevController(
             {
                 break;
             }
+            if (!feed.FeedBaseConfig.Install)
+            {
+                continue;
+            }
 
             var record = new CustomFeedRecord(
                 BskyConfig.Identity.ServiceDid,

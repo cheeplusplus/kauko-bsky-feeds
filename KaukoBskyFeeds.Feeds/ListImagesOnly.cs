@@ -1,5 +1,7 @@
+using System.Linq.Expressions;
 using FishyFlip;
 using FishyFlip.Models;
+using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
@@ -28,24 +30,40 @@ public class ListImagesOnly(
         CancellationToken cancellationToken = default
     )
     {
-        var listMemberDids = await cache.GetListMembers(
-            proto,
-            new ATUri(feedConfig.ListUri),
-            cancellationToken
-        );
+        var listUri = new ATUri(feedConfig.ListUri);
+        var listMemberDids = await cache.GetListMembers(proto, listUri, cancellationToken);
         var feedDids = listMemberDids.Select(s => s.Handler);
 
-        var posts = await db
-            .Posts.LatestFromCursor(cursor)
-            .Where(w =>
-                feedDids.Contains(w.Did)
-                && w.ImageCount > 0
-                && (w.ReplyParentUri == null || w.ReplyParentUri.StartsWith("at://" + w.Did))
-            )
-            .Take(limit ?? 50)
-            .ToListAsync(cancellationToken);
+        Expression<Func<Db.Models.Post, bool>> filter = (Db.Models.Post w) =>
+            feedDids.Contains(w.Did)
+            && w.ImageCount > 0
+            && (w.ReplyParentUri == null || w.ReplyParentUri.StartsWith("at://" + w.Did));
+
+        List<Db.Models.Post> posts;
+        string? newCursor = null;
+        if (feedConfig.FetchTimeline)
+        {
+            var postTlRes = await proto.Feed.GetListFeedAsync(listUri, 50, cancellationToken);
+            var postTl = postTlRes.HandleResult();
+            posts = postTl
+                .Feed.Where(w => w.Reason == null)
+                .Select(s => s.ToDbPost())
+                .AsQueryable()
+                .Where(filter)
+                .ToList();
+            newCursor = postTl?.Cursor;
+        }
+        else
+        {
+            posts = await db
+                .Posts.LatestFromCursor(cursor)
+                .Where(filter)
+                .Take(limit ?? 50)
+                .ToListAsync(cancellationToken);
+            newCursor = posts.LastOrDefault()?.GetCursor();
+        }
+
         var filteredFeed = posts.Select(s => new CustomSkeletonFeedPost(s.ToUri()));
-        var newCursor = posts.LastOrDefault()?.GetCursor();
 
         return new CustomSkeletonFeed(filteredFeed.ToList(), newCursor);
     }

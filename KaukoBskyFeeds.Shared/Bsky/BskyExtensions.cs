@@ -57,6 +57,16 @@ public static class BskyExtensions
         }
         return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
     }
+
+    public static long ToMicroseconds(this DateTime dt)
+    {
+        return ((DateTimeOffset)dt).ToUnixTimeMilliseconds() * 1000;
+    }
+
+    public static DateTime FromMicroseconds(long us)
+    {
+        return DateTimeOffset.FromUnixTimeMilliseconds(us / 1000).DateTime.AsUTC();
+    }
 }
 
 public class ATDidComparer : IEqualityComparer<ATDid>

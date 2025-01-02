@@ -1,0 +1,16 @@
+{
+    "type": "object",
+    "properties": {
+        "IngestConfig": {
+            "type": "object",
+            "properties": {
+                "Verbose": {
+                    "type": "boolean"
+                },
+                "ConsumeHistoricFeed": {
+                    "type": "boolean"
+                }
+            }
+        }
+    }
+}

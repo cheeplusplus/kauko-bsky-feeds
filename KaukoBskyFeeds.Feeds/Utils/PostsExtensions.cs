@@ -89,4 +89,45 @@ public static class PostExtensions
         var atUri = GetAtUriFromString(uri);
         return atUri != null ? ATDid.Create(atUri.Hostname) : null;
     }
+
+    public static Post ToDbPost(this FishyFlip.Models.FeedViewPost feedPost)
+    {
+        if (feedPost.Post.Record == null)
+        {
+            throw new Exception("Not a record?");
+        }
+
+        var did = feedPost.Post.Uri.Did?.ToString() ?? throw new Exception("Failed to parse URI");
+        var rkey = feedPost.Post.Uri.Rkey;
+
+        var imageCount = 0;
+        if (feedPost.Post.Embed is FishyFlip.Models.ImageViewEmbed ie && ie.Images != null)
+        {
+            imageCount = ie.Images.Length;
+        }
+        string? embedRecordUri = null;
+        if (feedPost.Post.Embed is FishyFlip.Models.RecordViewEmbed rve)
+        {
+            embedRecordUri = rve.Record.Uri.ToString();
+        }
+        if (feedPost.Post.Embed is FishyFlip.Models.RecordWithMediaViewEmbed rme)
+        {
+            embedRecordUri = rme.Record?.Record.ToString();
+        }
+
+        return new Post
+        {
+            Did = did,
+            Rkey = rkey,
+            EventTime = feedPost.Post.IndexedAt,
+            EventTimeUs = feedPost.Post.IndexedAt.ToMicroseconds(),
+            CreatedAt = feedPost.Post.Record.CreatedAt ?? DateTime.MinValue,
+            Text = feedPost.Post.Record.Text ?? string.Empty,
+            ReplyParentUri = feedPost.Reply?.Parent?.Uri?.ToString(),
+            ReplyRootUri = feedPost.Reply?.Root?.Uri?.ToString(),
+            EmbedType = feedPost.Post.Embed?.Type,
+            ImageCount = imageCount,
+            EmbedRecordUri = embedRecordUri,
+        };
+    }
 }
