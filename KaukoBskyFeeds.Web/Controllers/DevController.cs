@@ -164,7 +164,7 @@ public class DevController(
 
     public record CachedPostResponse(string AtUri, IPostRecord Post, long TotalInteractions);
 
-    [HttpGet("install")]
+    [HttpPost("install")]
     public async Task<Results<NotFound, Ok<string>>> Install(
         CancellationToken cancellationToken = default
     )
