@@ -23,6 +23,9 @@ public class DevController(
     ATProtocol _proto
 ) : BskyControllerBase(configuration, _proto)
 {
+    private bool DevEndpointsEnabled =>
+        env.IsDevelopment() || (BskyConfig.Web?.EnableDevEndpoints ?? false);
+
     [HttpGet("previewFeed")]
     public async Task<
         Results<NotFound, Ok<string>, JsonHttpResult<PostCollection>>
@@ -34,7 +37,7 @@ public class DevController(
         CancellationToken cancellationToken = default
     )
     {
-        if (!env.IsDevelopment())
+        if (!DevEndpointsEnabled)
         {
             return TypedResults.NotFound();
         }
@@ -85,7 +88,7 @@ public class DevController(
         CancellationToken cancellationToken = default
     )
     {
-        if (!env.IsDevelopment())
+        if (!DevEndpointsEnabled)
         {
             return TypedResults.NotFound();
         }
@@ -115,7 +118,7 @@ public class DevController(
         CancellationToken cancellationToken = default
     )
     {
-        if (!env.IsDevelopment())
+        if (!DevEndpointsEnabled)
         {
             return TypedResults.NotFound();
         }
@@ -139,7 +142,7 @@ public class DevController(
         CancellationToken cancellationToken = default
     )
     {
-        if (!env.IsDevelopment())
+        if (!DevEndpointsEnabled)
         {
             return TypedResults.NotFound();
         }

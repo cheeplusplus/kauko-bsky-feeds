@@ -4,10 +4,13 @@ public record BskyConfigBlock(
     BskyConfigAuth Auth,
     BskyConfigIdentity Identity,
     Dictionary<string, BskyConfigFeedProcessor> FeedProcessors,
+    BskyConfigWeb? Web = null,
     bool EnableInstall = false
 );
 
 public record BskyConfigAuth(string Username, string Password);
+
+public record BskyConfigWeb(bool? EnableDevEndpoints = false);
 
 public record BskyConfigIdentity(string Hostname, string PublishedAtUri)
 {

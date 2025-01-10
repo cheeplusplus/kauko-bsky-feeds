@@ -39,6 +39,14 @@
                         "PublishedAtUri"
                     ]
                 },
+                "Web": {
+                    "type": "object",
+                    "properties": {
+                        "EnableDevEndpoints": {
+                            "type": "boolean"
+                        }
+                    }
+                },
                 "FeedProcessors": {
                     "description": "FeedProcessor configurations",
                     "type": "object",
