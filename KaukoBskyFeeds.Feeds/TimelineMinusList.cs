@@ -64,7 +64,7 @@ public class TimelineMinusList(
                 cancellationToken: cancellationToken
             );
             var postTl = postTlRes.HandleResult();
-            posts = postTl.Feed.Select(s => s.ToDbPost()).ToList();
+            posts = postTl.Feed.Where(w => w.Reason == null).Select(s => s.ToDbPost()).ToList();
             newCursor = postTl.Cursor;
         }
         else
