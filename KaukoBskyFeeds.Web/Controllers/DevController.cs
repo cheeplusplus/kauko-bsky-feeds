@@ -85,7 +85,9 @@ public class DevController(
     [HttpGet("status")]
     public async Task<Ok<StatusResponse>> Status()
     {
-        var lastPost = await dbContext.Posts.OrderBy(o => o.EventTime).FirstOrDefaultAsync();
+        var lastPost = await dbContext
+            .Posts.OrderByDescending(o => o.EventTime)
+            .FirstOrDefaultAsync();
         var totalPosts = await dbContext.Posts.CountAsync();
         var distance =
             (DateTime.UtcNow - lastPost?.EventTime)?.ToString("d'd 'h'h 'm'm 's's'") ?? "N/A";
