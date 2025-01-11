@@ -20,6 +20,9 @@ public class JetstreamWorker(
     IJetstreamConsumer consumer
 ) : IHostedService
 {
+    private const int SAVE_MAX_SEC = 10;
+    private const int SAVE_MAX_SIZE = 10000;
+
     private readonly bool _consumeFromHistoricFeed = configuration.GetValue<bool>(
         "IngestConfig:ConsumeHistoricFeed"
     );
@@ -136,7 +139,7 @@ public class JetstreamWorker(
                         // Continue and try again next time
                         logger.LogError(
                             ex,
-                            "Encountered exception saving during message {uri}",
+                            "Encountered exception saving after message {uri}",
                             msg.ToAtUri()
                         );
                     }
@@ -154,8 +157,11 @@ public class JetstreamWorker(
 
     private async Task TrySave(JetstreamMessage lastMessage, CancellationToken cancellationToken)
     {
-        // Save every 10 seconds
-        if (DateTime.Now - TimeSpan.FromSeconds(10) > _lastSave)
+        // Save every 10 seconds or every 10000 records
+        if (
+            DateTime.Now - TimeSpan.FromSeconds(SAVE_MAX_SEC) > _lastSave
+            || _insertHolder.Size > SAVE_MAX_SIZE
+        )
         {
             logger.LogDebug("Committing to disk...");
             var saveCount = await CommitDb(cancellationToken);
@@ -409,10 +415,20 @@ class BulkInsertHolder(FeedDbContext db)
         PostReposts.Remove(key);
     }
 
+    public int Size =>
+        Posts.Count
+        + PostDeletes.Count
+        + PostLikes.Count
+        + PostLikeDeletes.Count
+        + PostQuotePosts.Count
+        + PostQuoteDeletes.Count
+        + PostReplies.Count
+        + PostReplyDeletes.Count
+        + PostReposts.Count
+        + PostRepostDeletes.Count;
+
     public async Task<(int, int)> Commit(CancellationToken cancellationToken)
     {
-        db.ChangeTracker.Clear();
-
         using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         await db.BulkInsertOrUpdateAsync(Posts.Values, cancellationToken: cancellationToken);
