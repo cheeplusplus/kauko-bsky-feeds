@@ -82,6 +82,18 @@ public class DevController(
         return TypedResults.Json(hydrated, Proto.Options.JsonSerializerOptions);
     }
 
+    [HttpGet("status")]
+    public async Task<Ok<StatusResponse>> Status()
+    {
+        var lastPost = await dbContext.Posts.OrderBy(o => o.EventTime).FirstOrDefaultAsync();
+        var totalPosts = await dbContext.Posts.CountAsync();
+        var distance =
+            (DateTime.UtcNow - lastPost?.EventTime)?.ToString("d'd 'h'h 'm'm 's's'") ?? "N/A";
+        return TypedResults.Ok(new StatusResponse(lastPost, totalPosts, distance));
+    }
+
+    public record StatusResponse(Db.Models.Post? LatestPost, int TotalPosts, string EventLatency);
+
     [HttpGet("query/user")]
     public async Task<Results<NotFound, JsonHttpResult<FeedProfile>>> QueryUser(
         [FromQuery] string handle,

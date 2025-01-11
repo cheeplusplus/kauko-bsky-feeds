@@ -28,7 +28,7 @@ public class JetstreamWorker(
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
     private int _saveFailureCount = 0;
-    private readonly BulkInsertHolder _insertHolder = new BulkInsertHolder(db);
+    private readonly BulkInsertHolder _insertHolder = new(db);
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
