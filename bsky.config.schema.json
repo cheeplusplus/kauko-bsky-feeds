@@ -53,6 +53,9 @@
                 "FeedProcessors": {
                     "description": "FeedProcessor configurations",
                     "type": "object",
+                    "propertyNames": {
+                        "maxLength": 24
+                    },
                     "additionalProperties": {
                         "type": "object",
                         "properties": {
@@ -66,7 +69,8 @@
                                 "properties": {
                                     "DisplayName": {
                                         "description": "Published list display name",
-                                        "type": "string"
+                                        "type": "string",
+                                        "maxLength": 24
                                     },
                                     "Description": {
                                         "description": "Published list description",
