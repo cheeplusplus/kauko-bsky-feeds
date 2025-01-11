@@ -25,7 +25,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
     )
     {
         var wsUri = GetWsUri(getCursor: getCursor, wantedCollections: wantedCollections);
-        logger.LogDebug("Connecting to Jetstream with URI {uri}", wsUri);
+        logger.LogInformation("Connecting to Jetstream with URI {uri}", wsUri);
 
         var factory = new Func<ClientWebSocket>(() =>
         {

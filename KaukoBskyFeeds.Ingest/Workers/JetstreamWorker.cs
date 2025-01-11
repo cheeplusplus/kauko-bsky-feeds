@@ -74,7 +74,7 @@ public class JetstreamWorker(
             if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_POST))
             {
                 var latest = db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
-                if (latest != null && (latestEvent == null || latest.EventTimeUs > latestEvent))
+                if (latest != null && (!latestEvent.HasValue || latest.EventTimeUs > latestEvent))
                 {
                     latestEvent = latest.EventTimeUs;
                 }
@@ -82,7 +82,7 @@ public class JetstreamWorker(
             if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_LIKE))
             {
                 var latest = db.PostLikes.OrderByDescending(o => o.EventTime).FirstOrDefault();
-                if (latest != null && (latestEvent == null || latest.EventTimeUs > latestEvent))
+                if (latest != null && (!latestEvent.HasValue || latest.EventTimeUs > latestEvent))
                 {
                     latestEvent = latest.EventTimeUs;
                 }
@@ -90,13 +90,13 @@ public class JetstreamWorker(
             if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_REPOST))
             {
                 var latest = db.PostReposts.OrderByDescending(o => o.EventTime).FirstOrDefault();
-                if (latest != null && (latestEvent == null || latest.EventTimeUs > latestEvent))
+                if (latest != null && (!latestEvent.HasValue || latest.EventTimeUs > latestEvent))
                 {
                     latestEvent = latest.EventTimeUs;
                 }
             }
 
-            if (latestEvent == null)
+            if (!latestEvent.HasValue)
             {
                 if (_ingestConfig?.ConsumeHistoricFeed ?? false)
                 {
@@ -122,10 +122,6 @@ public class JetstreamWorker(
             "Events found, resuming stream from {lastEventTime} ({offset})",
             timeUs,
             offset
-        );
-        logger.LogInformation(
-            "We are listening to the following collections: {collections}",
-            Collections?.ToArray() ?? BaseJetstreamConsumer.DEFAULT_COLLECTIONS
         );
 
         return offset;
