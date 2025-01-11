@@ -23,9 +23,9 @@ public class JetstreamWorker(
     private const int SAVE_MAX_SEC = 10;
     private const int SAVE_MAX_SIZE = 10000;
 
-    private readonly bool _consumeFromHistoricFeed = configuration.GetValue<bool>(
-        "IngestConfig:ConsumeHistoricFeed"
-    );
+    private readonly IngestConfig? _ingestConfig = configuration
+        .GetSection("IngestConfig")
+        .Get<IngestConfig>();
     private readonly CancellationTokenSource _readCancel = new();
     private DateTime _lastSave = DateTime.MinValue;
     private DateTime? _lastSaveMarker;
@@ -33,13 +33,20 @@ public class JetstreamWorker(
     private int _saveFailureCount = 0;
     private readonly BulkInsertHolder _insertHolder = new(db);
 
+    private List<string>? Collections =>
+        _ingestConfig?.SingleCollection != null ? [_ingestConfig.SingleCollection] : null;
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         // Begin to consume the reading channel
         _ = Task.Run(() => ReadChannel(_readCancel.Token), cancellationToken);
 
         // Start consuming
-        await consumer.Start(FetchLatestCursor, cancellationToken: cancellationToken);
+        await consumer.Start(
+            FetchLatestCursor,
+            wantedCollections: Collections,
+            cancellationToken: cancellationToken
+        );
 
         // Start the timer for cleanup
         _lastCleanup = DateTime.Now + TimeSpan.FromSeconds(30); // Delay 30s
@@ -61,10 +68,37 @@ public class JetstreamWorker(
         }
         else
         {
-            var _cursorEvent = db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
-            if (_cursorEvent == null)
+            // Check all the tables belonging to real collections for the latest event we've seen
+            // Filter so we can run different copies of ingest with different collections
+            long? latestEvent = null;
+            if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_POST))
             {
-                if (_consumeFromHistoricFeed)
+                var latest = db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
+                if (latest != null && (latestEvent == null || latest.EventTimeUs > latestEvent))
+                {
+                    latestEvent = latest.EventTimeUs;
+                }
+            }
+            if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_LIKE))
+            {
+                var latest = db.PostLikes.OrderByDescending(o => o.EventTime).FirstOrDefault();
+                if (latest != null && (latestEvent == null || latest.EventTimeUs > latestEvent))
+                {
+                    latestEvent = latest.EventTimeUs;
+                }
+            }
+            if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_REPOST))
+            {
+                var latest = db.PostReposts.OrderByDescending(o => o.EventTime).FirstOrDefault();
+                if (latest != null && (latestEvent == null || latest.EventTimeUs > latestEvent))
+                {
+                    latestEvent = latest.EventTimeUs;
+                }
+            }
+
+            if (latestEvent == null)
+            {
+                if (_ingestConfig?.ConsumeHistoricFeed ?? false)
                 {
                     logger.LogInformation("No events found, starting from earliest available");
                     return 0;
@@ -77,16 +111,23 @@ public class JetstreamWorker(
             }
             else
             {
-                timeUs = _cursorEvent.EventTimeUs;
+                timeUs = latestEvent.Value;
             }
         }
 
+        // Move back a little bit
         var offset = timeUs - ((long)TimeSpan.FromSeconds(1).TotalMicroseconds);
+
         logger.LogInformation(
             "Events found, resuming stream from {lastEventTime} ({offset})",
             timeUs,
             offset
         );
+        logger.LogInformation(
+            "We are listening to the following collections: {collections}",
+            Collections?.ToArray() ?? BaseJetstreamConsumer.DEFAULT_COLLECTIONS
+        );
+
         return offset;
     }
 

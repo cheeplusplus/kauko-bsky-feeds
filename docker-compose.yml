@@ -11,11 +11,36 @@ services:
     depends_on:
       - postgres
 
-  ingest:
+  ingest-posts:
     image: ghcr.io/cheeplusplus/kauko-bsky-feeds/ingest
     restart: always
     environment:
       ConnectionStrings__psqldb: "Host=postgres; Database=bskyfeed; Username=bskyfeed; Password=deefyksb"
+      IngestConfig__SingleCollection: "app.bksy.feed.post"
+    volumes:
+      - ./bsky.config.json:/app/bsky.config.json:ro
+      - ./ingest.config.json:/app/ingest.config.json:ro
+    depends_on:
+      - postgres
+
+  ingest-likes:
+    image: ghcr.io/cheeplusplus/kauko-bsky-feeds/ingest
+    restart: always
+    environment:
+      ConnectionStrings__psqldb: "Host=postgres; Database=bskyfeed; Username=bskyfeed; Password=deefyksb"
+      IngestConfig__SingleCollection: "app.bksy.feed.like"
+    volumes:
+      - ./bsky.config.json:/app/bsky.config.json:ro
+      - ./ingest.config.json:/app/ingest.config.json:ro
+    depends_on:
+      - postgres
+
+  ingest-reposts:
+    image: ghcr.io/cheeplusplus/kauko-bsky-feeds/ingest
+    restart: always
+    environment:
+      ConnectionStrings__psqldb: "Host=postgres; Database=bskyfeed; Username=bskyfeed; Password=deefyksb"
+      IngestConfig__SingleCollection: "app.bksy.feed.repost"
     volumes:
       - ./bsky.config.json:/app/bsky.config.json:ro
       - ./ingest.config.json:/app/ingest.config.json:ro

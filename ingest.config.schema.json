@@ -5,10 +5,16 @@
             "type": "object",
             "properties": {
                 "Verbose": {
+                    "description": "Enable verbose logging",
                     "type": "boolean"
                 },
                 "ConsumeHistoricFeed": {
+                    "description": "Consume historic feed, otherwise consume from tip of firehose",
                     "type": "boolean"
+                },
+                "SingleCollection": {
+                    "description": "Single Jetstream collections to ingest. Use to override default.",
+                    "type": "string"
                 }
             }
         }
