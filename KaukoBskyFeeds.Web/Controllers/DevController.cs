@@ -169,7 +169,7 @@ public class DevController(
         CancellationToken cancellationToken = default
     )
     {
-        if (!BskyConfig.EnableInstall)
+        if (!BskyConfig.Web?.EnableInstall ?? false)
         {
             return TypedResults.NotFound();
         }
