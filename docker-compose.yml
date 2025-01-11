@@ -16,7 +16,7 @@ services:
     restart: always
     environment:
       ConnectionStrings__psqldb: "Host=postgres; Database=bskyfeed; Username=bskyfeed; Password=deefyksb"
-      IngestConfig__SingleCollection: "app.bksy.feed.post"
+      IngestConfig__SingleCollection: "app.bsky.feed.post"
     volumes:
       - ./bsky.config.json:/app/bsky.config.json:ro
       - ./ingest.config.json:/app/ingest.config.json:ro
@@ -28,7 +28,7 @@ services:
     restart: always
     environment:
       ConnectionStrings__psqldb: "Host=postgres; Database=bskyfeed; Username=bskyfeed; Password=deefyksb"
-      IngestConfig__SingleCollection: "app.bksy.feed.like"
+      IngestConfig__SingleCollection: "app.bsky.feed.like"
     volumes:
       - ./bsky.config.json:/app/bsky.config.json:ro
       - ./ingest.config.json:/app/ingest.config.json:ro
@@ -40,7 +40,7 @@ services:
     restart: always
     environment:
       ConnectionStrings__psqldb: "Host=postgres; Database=bskyfeed; Username=bskyfeed; Password=deefyksb"
-      IngestConfig__SingleCollection: "app.bksy.feed.repost"
+      IngestConfig__SingleCollection: "app.bsky.feed.repost"
     volumes:
       - ./bsky.config.json:/app/bsky.config.json:ro
       - ./ingest.config.json:/app/ingest.config.json:ro
