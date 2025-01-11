@@ -66,7 +66,10 @@ public class BestArt(
         }
 
         postsQuery = postsQuery
-            .Where(w => (w.LikeCount + w.ReplyCount + w.RepostCount + w.QuotePostCount) > 3)
+            .Where(w =>
+                w.ImageCount > 0
+                && (w.LikeCount + w.ReplyCount + w.RepostCount + w.QuotePostCount) > 3
+            )
             .OrderByDescending(o => o.LikeCount + o.ReplyCount + o.RepostCount + o.QuotePostCount)
             .Take(FEED_LIMIT);
 
