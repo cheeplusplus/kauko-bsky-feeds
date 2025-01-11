@@ -20,12 +20,8 @@ public class JetstreamWorker(
     IJetstreamConsumer consumer
 ) : IHostedService
 {
-    private const int SAVE_MAX_SEC = 10;
-    private const int SAVE_MAX_SIZE = 10000;
-
-    private readonly IngestConfig? _ingestConfig = configuration
-        .GetSection("IngestConfig")
-        .Get<IngestConfig>();
+    private readonly IngestConfig _ingestConfig =
+        configuration.GetSection("IngestConfig").Get<IngestConfig>() ?? new();
     private readonly CancellationTokenSource _readCancel = new();
     private DateTime _lastSave = DateTime.MinValue;
     private DateTime? _lastSaveMarker;
@@ -33,8 +29,10 @@ public class JetstreamWorker(
     private int _saveFailureCount = 0;
     private readonly BulkInsertHolder _insertHolder = new(db);
 
+    private int SaveMaxSec => _ingestConfig.SaveMaxSec;
+    private int SaveMaxSize => _ingestConfig.SaveMaxSize;
     private List<string>? Collections =>
-        _ingestConfig?.SingleCollection != null ? [_ingestConfig.SingleCollection] : null;
+        _ingestConfig.SingleCollection != null ? [_ingestConfig.SingleCollection] : null;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -196,8 +194,8 @@ public class JetstreamWorker(
     {
         // Save every 10 seconds or every 10000 records
         if (
-            DateTime.Now - TimeSpan.FromSeconds(SAVE_MAX_SEC) > _lastSave
-            || _insertHolder.Size > SAVE_MAX_SIZE
+            DateTime.Now - TimeSpan.FromSeconds(_ingestConfig.SaveMaxSec) > _lastSave
+            || _insertHolder.Size > _ingestConfig.SaveMaxSize
         )
         {
             logger.LogDebug("Committing to disk...");
