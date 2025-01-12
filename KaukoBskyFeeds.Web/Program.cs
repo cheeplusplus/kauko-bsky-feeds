@@ -32,6 +32,7 @@ builder.Services.AddSingleton(f =>
 builder.Services.AddSingleton<FeedRegistry>();
 
 builder.Services.AddControllers();
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
@@ -64,5 +65,6 @@ if (bskyConfig != null)
 }
 
 app.MapControllers();
+app.MapHealthChecks("/healthz");
 
 app.Run();
