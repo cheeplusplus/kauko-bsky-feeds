@@ -112,7 +112,7 @@ public static class PostExtensions
         }
         if (feedPost.Post.Embed is FishyFlip.Models.RecordWithMediaViewEmbed rme)
         {
-            embedRecordUri = rme.Record?.Record.ToString();
+            embedRecordUri = rme.Record?.Record.Uri.ToString();
         }
 
         return new Post
