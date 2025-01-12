@@ -83,18 +83,44 @@ public class DevController(
     }
 
     [HttpGet("status")]
-    public async Task<Ok<StatusResponse>> Status()
+    public async Task<Ok<StatusResponse>> Status(CancellationToken cancellationToken = default)
     {
         var lastPost = await dbContext
             .Posts.OrderByDescending(o => o.EventTime)
-            .FirstOrDefaultAsync();
-        var totalPosts = await dbContext.Posts.CountAsync();
-        var distance =
-            (DateTime.UtcNow - lastPost?.EventTime)?.ToString("d'd 'h'h 'm'm 's's'") ?? "N/A";
-        return TypedResults.Ok(new StatusResponse(lastPost, totalPosts, distance));
+            .FirstOrDefaultAsync(cancellationToken);
+        var lastPostLike = await dbContext
+            .PostLikes.OrderByDescending(o => o.EventTime)
+            .FirstOrDefaultAsync(cancellationToken);
+        var lastPostRepost = await dbContext
+            .PostReposts.OrderByDescending(o => o.EventTime)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // var totalPosts = await dbContext.Posts.CountAsync(cancellationToken); // too slow
+        var totalPosts = await dbContext
+            .Database.SqlQuery<int>(
+                $"SELECT reltuples::int as estimate FROM pg_class WHERE relname = 'Posts';"
+            )
+            .ToListAsync(cancellationToken);
+        var totalPostCount = totalPosts.FirstOrDefault();
+
+        static string lat(DateTime? et) =>
+            (DateTime.UtcNow - et)?.ToString("d'd 'h'h 'm'm 's's'") ?? "N/A";
+        var postDistance = lat(lastPost?.EventTime);
+        var likeDistance = lat(lastPostLike?.EventTime);
+        var repostDistance = lat(lastPostRepost?.EventTime);
+
+        return TypedResults.Ok(
+            new StatusResponse(lastPost, totalPostCount, postDistance, likeDistance, repostDistance)
+        );
     }
 
-    public record StatusResponse(Db.Models.Post? LatestPost, int TotalPosts, string EventLatency);
+    public record StatusResponse(
+        Db.Models.Post? LatestPost,
+        int TotalPosts,
+        string PostLatency,
+        string LikeLatency,
+        string RepostLatency
+    );
 
     [HttpGet("query/user")]
     public async Task<Results<NotFound, JsonHttpResult<FeedProfile>>> QueryUser(
