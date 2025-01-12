@@ -19,7 +19,13 @@ builder.Configuration.AddJsonFile(ingestDataPath.ConfigPath);
 builder.Services.AddDbContext<FeedDbContext>(options =>
 {
     var connStr = builder.Configuration.GetConnectionString("psqldb");
-    options.UseNpgsql(connStr);
+    options.UseNpgsql(
+        connStr,
+        options =>
+        {
+            options.CommandTimeout(300);
+        }
+    );
 
     // db.EnableSensitiveDataLogging();
     options.ConfigureWarnings(b =>

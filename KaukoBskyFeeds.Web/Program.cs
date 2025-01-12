@@ -20,7 +20,13 @@ builder.Services.Configure<JsonOptions>(options =>
 builder.Services.AddDbContext<FeedDbContext>(options =>
 {
     var connStr = builder.Configuration.GetConnectionString("psqldb");
-    options.UseNpgsql(connStr);
+    options.UseNpgsql(
+        connStr,
+        options =>
+        {
+            options.CommandTimeout(60);
+        }
+    );
 });
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IBskyCache, BskyCache>();
