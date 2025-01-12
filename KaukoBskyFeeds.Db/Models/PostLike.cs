@@ -6,7 +6,7 @@ namespace KaukoBskyFeeds.Db.Models;
 
 [PrimaryKey(nameof(LikeDid), nameof(LikeRkey))]
 [Index(nameof(ParentDid), nameof(ParentRkey))]
-[Index(nameof(EventTime))]
+[Index(nameof(EventTime), nameof(ParentDid), IsDescending = [true, false])]
 public class PostLike : IPostInteraction
 {
     [Required]

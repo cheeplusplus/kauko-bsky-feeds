@@ -6,7 +6,7 @@ namespace KaukoBskyFeeds.Db.Models;
 
 [PrimaryKey(nameof(ReplyDid), nameof(ReplyRkey))]
 [Index(nameof(ParentDid), nameof(ParentRkey))]
-[Index(nameof(EventTime))]
+[Index(nameof(EventTime), nameof(ParentDid), IsDescending = [true, false])]
 public class PostReply : IPostInteraction
 {
     [Required]
