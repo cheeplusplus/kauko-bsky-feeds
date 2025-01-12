@@ -49,9 +49,21 @@ public static class PostExtensions
         return dt.ToString("o", CultureInfo.InvariantCulture);
     }
 
+    public static string ToCollectionType(this IPostRecord post)
+    {
+        return post switch
+        {
+            Post or PostQuotePost or PostReply => BskyConstants.COLLECTION_TYPE_POST,
+            PostLike => BskyConstants.COLLECTION_TYPE_LIKE,
+            PostRepost => BskyConstants.COLLECTION_TYPE_REPOST,
+            _ => "?",
+        };
+    }
+
     public static string ToUri(this IPostRecord post)
     {
-        return $"at://{post.Ref.Did}/{BskyConstants.COLLECTION_TYPE_POST}/{post.Ref.Rkey}";
+        // TODO: This isn't quite correct as it may not actually be a post
+        return $"at://{post.Ref.Did}/{post.ToCollectionType()}/{post.Ref.Rkey}";
     }
 
     public static ATUri ToAtUri(this IPostRecord post)

@@ -99,7 +99,7 @@ public class TimelineMinusList(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to judge post {s}", s);
+                logger.LogError(ex, "Failed to judge post {s}", s.ToAtUri());
                 judgement = new PostJudgement(PostType.ErrorState, false);
             }
 
