@@ -42,7 +42,7 @@ public abstract class BasePost : IPostRecord
 }
 
 [PrimaryKey(nameof(Did), nameof(Rkey))]
-[Index(nameof(EventTime), nameof(Did), IsDescending = [true, false])]
+[Index(nameof(EventTime), AllDescending = true)]
 public class Post : BasePost { }
 
 public class PostEmbeds
