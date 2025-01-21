@@ -9,7 +9,7 @@ using ZstdSharp;
 
 namespace KaukoBskyFeeds.Ingest.Jetstream;
 
-public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
+public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger, JetstreamMetrics metrics)
     : BaseJetstreamConsumer,
         IDisposable
 {
@@ -55,6 +55,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
             else
             {
                 logger.LogInformation("Reconnection happened, type: {type}", info.Type);
+                metrics.WsReconnect(_wsClient.Url.Host);
             }
         });
         _disposers.Add(reconnSubscription);
@@ -64,6 +65,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
             if (info.Exception != null)
             {
                 logger.LogError(info.Exception, "Got exception inside Websocket");
+                metrics.WsError(_wsClient.Url.Host, info.Exception.GetType().Name);
             }
 
             logger.LogInformation(
@@ -123,6 +125,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
             if (message.MessageType == WebSocketMessageType.Text)
             {
                 serializedStr = message.Text!;
+                metrics.SawEvent(message.Text!.Length);
             }
             else if (message.MessageType == WebSocketMessageType.Binary)
             {
@@ -130,10 +133,12 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
                 using var ds = new DecompressionStream(ms, _decompressor);
                 using var sr = new StreamReader(ds);
                 serializedStr = sr.ReadToEnd();
+                metrics.SawEvent(serializedStr.Length, message.Binary!.Length);
             }
             else
             {
                 logger.LogError("Got unknown message type: {msgType}", message.MessageType);
+                metrics.SawEventGenericError($"MessageType: {message.MessageType}");
                 return;
             }
 
@@ -143,14 +148,17 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
                 if (deserializedMsg == null)
                 {
                     logger.LogWarning("Null JSON: {json}", serializedStr);
+                    metrics.SawEventParseError("IsNull");
                     return;
                 }
                 LastEventTime = deserializedMsg.TimeMicroseconds;
+                metrics.SawEventParsed(deserializedMsg.Commit?.Collection ?? "_unknown_");
                 await ChannelWriter.WriteAsync(deserializedMsg);
             }
             catch (JsonException je)
             {
                 logger.LogError(je, "Failed to deserialize JSON: {json}", serializedStr);
+                metrics.SawEventParseError(je.GetType().Name);
             }
         }
         catch (ChannelClosedException)
@@ -160,6 +168,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
         catch (Exception ex)
         {
             logger.LogError(ex, "Got exception in message processing");
+            metrics.SawEventGenericError(ex.GetType().Name);
         }
     }
 

@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using EFCore.BulkExtensions;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
@@ -20,6 +19,7 @@ public class JetstreamWorker(
     IConfiguration configuration,
     IHostApplicationLifetime lifetime,
     FeedDbContext db,
+    IngestMetrics metrics,
     FishyFlip.ATProtocol proto,
     IBskyCache bskyCache,
     IMemoryCache memCache,
@@ -338,6 +338,8 @@ public class JetstreamWorker(
         CancellationToken cancellationToken = default
     )
     {
+        metrics.IngestEvent(message.Commit?.Collection ?? "_unknown_", message.MessageTime);
+
         if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_POST)
         {
             await HandleMessage_Post(message, cancellationToken);

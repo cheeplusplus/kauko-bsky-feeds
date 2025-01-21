@@ -6,8 +6,10 @@ using ZstdSharp;
 
 namespace KaukoBskyFeeds.Ingest.Jetstream;
 
-public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger)
-    : BaseJetstreamConsumer
+public class JetstreamConsumerNativeWs(
+    ILogger<JetstreamConsumerNativeWs> logger,
+    JetstreamMetrics metrics
+) : BaseJetstreamConsumer
 {
     private readonly Decompressor _decompressor = GetDecompressor();
     private ClientWebSocket? _wsClient;
@@ -44,7 +46,10 @@ public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger
                     catch (Exception ex)
                     {
                         logger.LogError(ex, "Got exception in listen loop");
+                        metrics.WsError(wsUri.Host, ex.GetType().Name);
                     }
+
+                    metrics.WsReconnect(wsUri.Host);
                 } while (!_cancelSource.IsCancellationRequested);
 
                 logger.LogWarning("Consumer is shutting down");
@@ -91,6 +96,7 @@ public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
                     await msgStream.CopyToAsync(textStream, cancellationToken);
+                    metrics.SawEvent(textStream.Length);
                 }
                 else if (result.MessageType == WebSocketMessageType.Binary)
                 {
@@ -99,10 +105,12 @@ public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger
                     try
                     {
                         await dc.CopyToAsync(textStream, cancellationToken);
+                        metrics.SawEvent(textStream.Length, msgStream.Length);
                     }
                     catch (ZstdException zex)
                     {
                         logger.LogError(zex, "Decompression error");
+                        metrics.SawEventGenericError(zex.GetType().Name);
                         throw;
                     }
                 }
@@ -124,11 +132,13 @@ public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger
                 {
                     LastEventTime = deserialized.TimeMicroseconds;
                     await ChannelWriter.WriteAsync(deserialized, cancellationToken);
+                    metrics.SawEventParsed(deserialized.Commit?.Collection ?? "_unknown_");
                 }
             }
             catch (JsonException jex)
             {
                 logger.LogError(jex, "JSON deserialization error");
+                metrics.SawEventParseError(jex.GetType().Name);
 
                 try
                 {

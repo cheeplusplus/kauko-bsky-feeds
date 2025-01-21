@@ -4,6 +4,7 @@ using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,8 +31,22 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
 builder.Services.AddBskyServices();
 builder.Services.AddSingleton<FeedRegistry>();
 
-builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
+builder
+    .Services.AddOpenTelemetry()
+    .WithMetrics(builder =>
+        builder
+            .AddPrometheusExporter()
+            .AddMeter(
+                "System.Net.Http",
+                "System.Runtime",
+                "Microsoft.EntityFrameworkCore",
+                "Microsoft.Extensions.Diagnostics.HealthChecks"
+            )
+            .AddAspNetCoreInstrumentation()
+    );
+
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -64,6 +79,8 @@ if (bskyConfig != null)
 }
 
 app.MapControllers();
-app.MapHealthChecks("/healthz");
+
+app.MapHealthChecks("/healthz").DisableHttpMetrics();
+app.MapPrometheusScrapingEndpoint();
 
 app.Run();

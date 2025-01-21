@@ -1,4 +1,5 @@
 ﻿using KaukoBskyFeeds.Db;
+using KaukoBskyFeeds.Ingest;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Workers;
 using KaukoBskyFeeds.Shared;
@@ -9,6 +10,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -43,6 +46,25 @@ builder.Services.AddBskyServices();
 // builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();
 builder.Services.AddHostedService<JetstreamWorker>();
+
+builder.Services.AddSingleton<IngestMetrics>();
+builder.Services.AddSingleton<JetstreamMetrics>();
+builder
+    .Services.AddOpenTelemetry()
+    .ConfigureResource(builder =>
+        builder.AddService("KaukoBskyFeeds.Ingest", serviceNamespace: "KaukoBskyFeeds")
+    )
+    .WithMetrics(builder =>
+        builder
+            .AddPrometheusHttpListener()
+            .AddMeter(
+                "System.Net.Http",
+                "System.Runtime",
+                "Microsoft.EntityFrameworkCore",
+                IngestMetrics.METRIC_METER_NAME,
+                JetstreamMetrics.METRIC_METER_NAME
+            )
+    );
 
 if (builder.Configuration.GetValue<bool>("IngestConfig:Verbose"))
 {
