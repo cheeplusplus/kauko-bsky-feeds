@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using EFCore.BulkExtensions;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
@@ -48,7 +49,6 @@ public class JetstreamWorker(
         // Start consuming
         await consumer.Start(
             getCursor: FetchLatestCursor,
-            getWantedDids: FetchWantedDids,
             wantedCollections: Collections,
             cancellationToken: cancellationToken
         );
@@ -139,6 +139,7 @@ public class JetstreamWorker(
     }
 
     private async Task<IEnumerable<string>?> FetchWantedDids(
+        string collection,
         CancellationToken cancellationToken = default
     )
     {
@@ -159,12 +160,7 @@ public class JetstreamWorker(
         List<string> wantedDids = [];
         if (_ingestConfig.SingleCollection != null && _ingestConfig.Filter != null)
         {
-            if (
-                _ingestConfig.Filter.TryGetValue(
-                    _ingestConfig.SingleCollection,
-                    out IngestFilterConfig? targetFilter
-                )
-            )
+            if (_ingestConfig.Filter.TryGetValue(collection, out IngestFilterConfig? targetFilter))
             {
                 if (targetFilter.ListUris != null)
                 {
@@ -211,7 +207,7 @@ public class JetstreamWorker(
                 {
                     try
                     {
-                        HandleMessage(msg);
+                        await HandleMessage(msg, cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -269,8 +265,8 @@ public class JetstreamWorker(
     {
         // Save every 10 seconds or every 10000 records
         if (
-            DateTime.Now - TimeSpan.FromSeconds(_ingestConfig.SaveMaxSec) > _lastSave
-            || _insertHolder.Size > _ingestConfig.SaveMaxSize
+            DateTime.Now - TimeSpan.FromSeconds(SaveMaxSec) > _lastSave
+            || _insertHolder.Size > SaveMaxSize
         )
         {
             logger.LogDebug("Committing to disk...");
@@ -322,8 +318,31 @@ public class JetstreamWorker(
         }
     }
 
-    private void HandleMessage(JetstreamMessage message)
+    private async Task HandleMessage(
+        JetstreamMessage message,
+        CancellationToken cancellationToken = default
+    )
     {
+        if (message.Commit?.Collection != null)
+        {
+            // Determine if we should filter out this DID for this specific collection
+            try
+            {
+                var wantedDids = await FetchWantedDids(
+                    message.Commit.Collection,
+                    cancellationToken
+                );
+                if (wantedDids != null && !wantedDids.Contains(message.Did))
+                {
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to fetch wanted DIDs list, continuing");
+            }
+        }
+
         if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_POST)
         {
             HandleMessage_Post(message);

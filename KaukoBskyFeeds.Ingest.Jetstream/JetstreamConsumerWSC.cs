@@ -20,7 +20,6 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
 
     public override async Task Start(
         Func<CancellationToken, Task<long?>>? getCursor = null,
-        Func<CancellationToken, Task<IEnumerable<string>?>>? getWantedDids = null,
         IEnumerable<string>? wantedCollections = null,
         CancellationToken cancellationToken = default
     )
@@ -28,7 +27,6 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
         Task<Uri> doGetWsUri() =>
             GetWsUri(
                 getCursor: getCursor,
-                getWantedDids: getWantedDids,
                 wantedCollections: wantedCollections,
                 cancellationToken: cancellationToken
             );

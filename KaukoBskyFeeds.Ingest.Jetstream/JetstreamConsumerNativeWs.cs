@@ -15,14 +15,12 @@ public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger
 
     public override async Task Start(
         Func<CancellationToken, Task<long?>>? getCursor = null,
-        Func<CancellationToken, Task<IEnumerable<string>?>>? getWantedDids = null,
         IEnumerable<string>? wantedCollections = null,
         CancellationToken cancellationToken = default
     )
     {
         var wsUri = await GetWsUri(
             getCursor: getCursor,
-            getWantedDids: getWantedDids,
             wantedCollections: wantedCollections,
             cancellationToken: cancellationToken
         );
