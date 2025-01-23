@@ -1,4 +1,3 @@
-using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
@@ -139,6 +138,22 @@ public static class IngestExtensions
             EventTime = message.MessageTime.AsUTC(),
             EventTimeUs = message.TimeMicroseconds,
         };
+    }
+
+    public static string? GetSubjectDid(this JetstreamMessage message)
+    {
+        if (message.Commit?.Record is not IAppBskyFeedWithSubject fws)
+        {
+            return null;
+        }
+
+        var (subjectDid, subjectRkey) = GetPairFromATUri(fws.Subject.Uri);
+        if (subjectDid == null || subjectRkey == null)
+        {
+            return null;
+        }
+
+        return subjectDid;
     }
 
     private static (string?, string?) GetPairFromATUri(string uri)

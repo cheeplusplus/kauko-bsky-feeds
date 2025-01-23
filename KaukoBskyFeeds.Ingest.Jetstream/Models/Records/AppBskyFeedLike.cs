@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 
-public class AppBskyFeedLike : JetstreamRecord
+public class AppBskyFeedLike : JetstreamRecord, IAppBskyFeedWithSubject
 {
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; set; }

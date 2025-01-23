@@ -8,6 +8,7 @@ using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -21,6 +22,7 @@ public class JetstreamWorker(
     FeedDbContext db,
     FishyFlip.ATProtocol proto,
     IBskyCache bskyCache,
+    IMemoryCache memCache,
     IJetstreamConsumer consumer
 ) : IHostedService
 {
@@ -138,7 +140,7 @@ public class JetstreamWorker(
         return offset;
     }
 
-    private async Task<IEnumerable<string>?> FetchWantedDids(
+    private async Task<List<string>?> FetchWantedDids(
         string collection,
         CancellationToken cancellationToken = default
     )
@@ -156,44 +158,57 @@ public class JetstreamWorker(
             );
         }
 
-        // Fetch wanted DIDs
-        List<string> wantedDids = [];
-        if (_ingestConfig.SingleCollection != null && _ingestConfig.Filter != null)
-        {
-            if (_ingestConfig.Filter.TryGetValue(collection, out IngestFilterConfig? targetFilter))
+        return await memCache.GetOrCreateAsync(
+            $"ingest_wanteddids_{collection}",
+            async (_) =>
             {
-                if (targetFilter.ListUris != null)
+                // Fetch wanted DIDs
+                List<string> wantedDids = [];
+                if (_ingestConfig.SingleCollection != null && _ingestConfig.Filter != null)
                 {
-                    foreach (var listUri in targetFilter.ListUris)
+                    if (
+                        _ingestConfig.Filter.TryGetValue(
+                            collection,
+                            out IngestFilterConfig? targetFilter
+                        )
+                    )
                     {
-                        await EnsureLogin();
+                        if (targetFilter.ListUris != null)
+                        {
+                            foreach (var listUri in targetFilter.ListUris)
+                            {
+                                await EnsureLogin();
 
-                        var listDids = await bskyCache.GetListMembers(
-                            proto,
-                            FishyFlip.Models.ATUri.Create(listUri),
-                            cancellationToken
-                        );
-                        wantedDids.AddRange(listDids.Select(s => s.ToString()));
+                                var listDids = await bskyCache.GetListMembers(
+                                    proto,
+                                    FishyFlip.Models.ATUri.Create(listUri),
+                                    cancellationToken
+                                );
+                                wantedDids.AddRange(listDids.Select(s => s.ToString()));
+                            }
+                        }
+                        if (targetFilter.Dids != null)
+                        {
+                            wantedDids.AddRange(targetFilter.Dids);
+                        }
                     }
                 }
-                if (targetFilter.Dids != null)
+
+                if (wantedDids.Count == 0)
                 {
-                    wantedDids.AddRange(targetFilter.Dids);
+                    return null;
                 }
-            }
-        }
 
-        if (wantedDids.Count == 0)
-        {
-            return null;
-        }
+                logger.LogInformation(
+                    "Got list of wanted DIDs to filter ({wantedDidCount}) for collection {collection}",
+                    wantedDids.Count,
+                    collection
+                );
 
-        logger.LogInformation(
-            "Got list of wanted DIDs to filter ({wantedDidCount})",
-            wantedDids.Count
+                return wantedDids;
+            },
+            BskyCache.DEFAULT_OPTS
         );
-
-        return wantedDids;
     }
 
     private async void ReadChannel(CancellationToken cancellationToken)
@@ -323,45 +338,41 @@ public class JetstreamWorker(
         CancellationToken cancellationToken = default
     )
     {
-        if (message.Commit?.Collection != null)
-        {
-            // Determine if we should filter out this DID for this specific collection
-            try
-            {
-                var wantedDids = await FetchWantedDids(
-                    message.Commit.Collection,
-                    cancellationToken
-                );
-                if (wantedDids != null && !wantedDids.Contains(message.Did))
-                {
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to fetch wanted DIDs list, continuing");
-            }
-        }
-
         if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_POST)
         {
-            HandleMessage_Post(message);
+            await HandleMessage_Post(message, cancellationToken);
         }
         else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_LIKE)
         {
-            HandleMessage_Like(message);
+            await HandleMessage_Like(message, cancellationToken);
         }
         else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_REPOST)
         {
-            HandleMessage_Repost(message);
+            await HandleMessage_Repost(message, cancellationToken);
         }
     }
 
-    private void HandleMessage_Post(JetstreamMessage message)
+    private async Task HandleMessage_Post(
+        JetstreamMessage message,
+        CancellationToken cancellationToken = default
+    )
     {
         if (message.Commit?.Operation == null)
         {
             return;
+        }
+
+        try
+        {
+            var wantedDids = await FetchWantedDids(message.Commit.Collection, cancellationToken);
+            if (wantedDids != null && !wantedDids.Contains(message.Did))
+            {
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to fetch wanted DIDs list, continuing");
         }
 
         if (message.Commit.Operation == JetstreamOperation.Create)
@@ -391,11 +402,28 @@ public class JetstreamWorker(
         }
     }
 
-    private void HandleMessage_Like(JetstreamMessage message)
+    private async Task HandleMessage_Like(
+        JetstreamMessage message,
+        CancellationToken cancellationToken = default
+    )
     {
         if (message.Commit?.Record is not AppBskyFeedLike)
         {
             return;
+        }
+
+        try
+        {
+            var wantedDids = await FetchWantedDids(message.Commit.Collection, cancellationToken);
+            var subjectDid = message.GetSubjectDid();
+            if (wantedDids != null && subjectDid != null && !wantedDids.Contains(subjectDid))
+            {
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to fetch wanted DIDs list, continuing");
         }
 
         if (message.Commit.Operation == JetstreamOperation.Create)
@@ -427,11 +455,28 @@ public class JetstreamWorker(
         }
     }
 
-    private void HandleMessage_Repost(JetstreamMessage message)
+    private async Task HandleMessage_Repost(
+        JetstreamMessage message,
+        CancellationToken cancellationToken = default
+    )
     {
         if (message.Commit?.Record is not AppBskyFeedRepost commitRecord)
         {
             return;
+        }
+
+        try
+        {
+            var wantedDids = await FetchWantedDids(message.Commit.Collection, cancellationToken);
+            var subjectDid = message.GetSubjectDid();
+            if (wantedDids != null && subjectDid != null && !wantedDids.Contains(subjectDid))
+            {
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to fetch wanted DIDs list, continuing");
         }
 
         if (message.Commit.Operation == JetstreamOperation.Create)
