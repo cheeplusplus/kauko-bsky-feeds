@@ -57,7 +57,8 @@ public class LofiWorker(
                 : null;
 
         await jsc.Start(
-            getCursor: () => _lastCursor ?? backfillCursor,
+            getCursor: (_) => Task.FromResult(_lastCursor ?? backfillCursor),
+            wantedCollections: [BskyConstants.COLLECTION_TYPE_POST],
             cancellationToken: cancellationToken
         );
 
