@@ -11,7 +11,8 @@ public interface IJetstreamConsumer
     public ChannelReader<JetstreamMessage> ChannelReader { get; }
     long LastEventTime { get; }
     Task Start(
-        Func<long?>? getCursor = null,
+        Func<CancellationToken, Task<long?>>? getCursor = null,
+        Func<CancellationToken, Task<IEnumerable<string>?>>? getWantedDids = null,
         IEnumerable<string>? wantedCollections = null,
         CancellationToken cancellationToken = default
     );
@@ -42,7 +43,8 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
     public ChannelReader<JetstreamMessage> ChannelReader => _channel.Reader;
     public long LastEventTime { get; protected set; }
     public abstract Task Start(
-        Func<long?>? getCursor = null,
+        Func<CancellationToken, Task<long?>>? getCursor = null,
+        Func<CancellationToken, Task<IEnumerable<string>?>>? getWantedDids = null,
         IEnumerable<string>? wantedCollections = null,
         CancellationToken cancellationToken = default
     );
@@ -69,17 +71,21 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
         return decompressor;
     }
 
-    protected static Uri GetWsUri(
-        Func<long?>? getCursor = null,
+    protected static async Task<Uri> GetWsUri(
+        Func<CancellationToken, Task<long?>>? getCursor = null,
+        Func<CancellationToken, Task<IEnumerable<string>?>>? getWantedDids = null,
         IEnumerable<string>? wantedCollections = null,
-        string? hostUrl = null
+        string? hostUrl = null,
+        CancellationToken cancellationToken = default
     )
     {
         var chosenHostUrl =
             hostUrl
             ?? Random.Shared.GetItems(JETSTREAM_URLS, 1).FirstOrDefault()
             ?? JETSTREAM_URLS[0];
-        long? cursor = getCursor == null ? null : getCursor();
+        long? cursor = getCursor == null ? null : await getCursor(cancellationToken);
+        IEnumerable<string>? wantedDids =
+            getWantedDids == null ? null : await getWantedDids(cancellationToken);
 
         // require an actually empty list to send nothing
         wantedCollections ??= DEFAULT_COLLECTIONS;
@@ -101,6 +107,13 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
             foreach (var coll in wantedCollections)
             {
                 querySegments.Add(new KeyValuePair<string, string>("wantedCollections", coll));
+            }
+        }
+        if (wantedDids?.Any() ?? false)
+        {
+            foreach (var did in wantedDids)
+            {
+                querySegments.Add(new KeyValuePair<string, string>("wantedDids", did));
             }
         }
         var queryStr =

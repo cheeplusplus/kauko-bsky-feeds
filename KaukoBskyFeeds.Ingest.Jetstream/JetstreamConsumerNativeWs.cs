@@ -11,15 +11,21 @@ public class JetstreamConsumerNativeWs(ILogger<JetstreamConsumerNativeWs> logger
 {
     private readonly Decompressor _decompressor = GetDecompressor();
     private ClientWebSocket? _wsClient;
-    private readonly CancellationTokenSource _cancelSource = new CancellationTokenSource();
+    private readonly CancellationTokenSource _cancelSource = new();
 
     public override async Task Start(
-        Func<long?>? getCursor = null,
+        Func<CancellationToken, Task<long?>>? getCursor = null,
+        Func<CancellationToken, Task<IEnumerable<string>?>>? getWantedDids = null,
         IEnumerable<string>? wantedCollections = null,
         CancellationToken cancellationToken = default
     )
     {
-        var wsUri = GetWsUri(getCursor: getCursor, wantedCollections: wantedCollections);
+        var wsUri = await GetWsUri(
+            getCursor: getCursor,
+            getWantedDids: getWantedDids,
+            wantedCollections: wantedCollections,
+            cancellationToken: cancellationToken
+        );
 
         _wsClient = new ClientWebSocket();
         _wsClient.Options.SetRequestHeader("Socket-Encoding", "zstd");

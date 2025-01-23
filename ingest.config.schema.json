@@ -15,6 +15,27 @@
                 "SingleCollection": {
                     "description": "Single Jetstream collections to ingest. Use to override default.",
                     "type": "string"
+                },
+                "Filter": {
+                    "description": "Filter certain collections by DIDs",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                            "ListUris": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "Dids": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

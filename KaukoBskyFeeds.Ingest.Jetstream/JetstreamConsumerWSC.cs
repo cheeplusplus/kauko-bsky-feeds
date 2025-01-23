@@ -19,12 +19,20 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
     private readonly List<IDisposable> _disposers = [];
 
     public override async Task Start(
-        Func<long?>? getCursor = null,
+        Func<CancellationToken, Task<long?>>? getCursor = null,
+        Func<CancellationToken, Task<IEnumerable<string>?>>? getWantedDids = null,
         IEnumerable<string>? wantedCollections = null,
         CancellationToken cancellationToken = default
     )
     {
-        var wsUri = GetWsUri(getCursor: getCursor, wantedCollections: wantedCollections);
+        Task<Uri> doGetWsUri() =>
+            GetWsUri(
+                getCursor: getCursor,
+                getWantedDids: getWantedDids,
+                wantedCollections: wantedCollections,
+                cancellationToken: cancellationToken
+            );
+        var wsUri = await doGetWsUri();
         logger.LogInformation("Connecting to Jetstream with URI {uri}", wsUri);
 
         var factory = new Func<ClientWebSocket>(() =>
@@ -53,7 +61,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
         });
         _disposers.Add(reconnSubscription);
 
-        var disconSubscription = _wsClient.DisconnectionHappened.Subscribe(info =>
+        var disconSubscription = _wsClient.DisconnectionHappened.Subscribe(async info =>
         {
             if (info.Exception != null)
             {
@@ -73,10 +81,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger)
                 && info.CloseStatus != WebSocketCloseStatus.NormalClosure
             )
             {
-                _wsClient.Url = GetWsUri(
-                    getCursor: getCursor,
-                    wantedCollections: wantedCollections
-                );
+                _wsClient.Url = await doGetWsUri();
                 logger.LogDebug("Switching Jetstream URI to {uri}", _wsClient.Url);
             }
         });

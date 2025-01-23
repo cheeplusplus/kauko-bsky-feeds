@@ -5,5 +5,8 @@ public record IngestConfig(
     int SaveMaxSize = 10000,
     bool Verbose = false,
     bool ConsumeHistoricFeed = false,
-    string? SingleCollection = null
+    string? SingleCollection = null,
+    Dictionary<string, IngestFilterConfig>? Filter = null
 );
+
+public record IngestFilterConfig(List<string>? Dids = null, List<string>? ListUris = null);

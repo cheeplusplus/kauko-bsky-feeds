@@ -4,6 +4,7 @@ using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
+using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -17,9 +18,14 @@ public class JetstreamWorker(
     IConfiguration configuration,
     IHostApplicationLifetime lifetime,
     FeedDbContext db,
+    FishyFlip.ATProtocol proto,
+    IBskyCache bskyCache,
     IJetstreamConsumer consumer
 ) : IHostedService
 {
+    private readonly BskyConfigBlock _bskyConfig = configuration
+        .GetSection("BskyConfig")
+        .Get<BskyConfigBlock>()!;
     private readonly IngestConfig _ingestConfig =
         configuration.GetSection("IngestConfig").Get<IngestConfig>() ?? new();
     private readonly CancellationTokenSource _readCancel = new();
@@ -41,7 +47,8 @@ public class JetstreamWorker(
 
         // Start consuming
         await consumer.Start(
-            FetchLatestCursor,
+            getCursor: FetchLatestCursor,
+            getWantedDids: FetchWantedDids,
             wantedCollections: Collections,
             cancellationToken: cancellationToken
         );
@@ -57,7 +64,7 @@ public class JetstreamWorker(
         await CommitDb(cancellationToken); // make sure we're up to date before leaving
     }
 
-    private long? FetchLatestCursor()
+    private async Task<long?> FetchLatestCursor(CancellationToken cancellationToken = default)
     {
         long timeUs;
         if (_lastSaveMarker != null)
@@ -71,7 +78,9 @@ public class JetstreamWorker(
             long? latestEvent = null;
             if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_POST))
             {
-                var latest = db.Posts.OrderByDescending(o => o.EventTime).FirstOrDefault();
+                var latest = await db
+                    .Posts.OrderByDescending(o => o.EventTime)
+                    .FirstOrDefaultAsync(cancellationToken);
                 if (latest != null && (!latestEvent.HasValue || latest.EventTimeUs > latestEvent))
                 {
                     latestEvent = latest.EventTimeUs;
@@ -79,7 +88,9 @@ public class JetstreamWorker(
             }
             if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_LIKE))
             {
-                var latest = db.PostLikes.OrderByDescending(o => o.EventTime).FirstOrDefault();
+                var latest = await db
+                    .PostLikes.OrderByDescending(o => o.EventTime)
+                    .FirstOrDefaultAsync(cancellationToken);
                 if (latest != null && (!latestEvent.HasValue || latest.EventTimeUs > latestEvent))
                 {
                     latestEvent = latest.EventTimeUs;
@@ -87,7 +98,9 @@ public class JetstreamWorker(
             }
             if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_REPOST))
             {
-                var latest = db.PostReposts.OrderByDescending(o => o.EventTime).FirstOrDefault();
+                var latest = await db
+                    .PostReposts.OrderByDescending(o => o.EventTime)
+                    .FirstOrDefaultAsync(cancellationToken);
                 if (latest != null && (!latestEvent.HasValue || latest.EventTimeUs > latestEvent))
                 {
                     latestEvent = latest.EventTimeUs;
@@ -123,6 +136,68 @@ public class JetstreamWorker(
         );
 
         return offset;
+    }
+
+    private async Task<IEnumerable<string>?> FetchWantedDids(
+        CancellationToken cancellationToken = default
+    )
+    {
+        async Task EnsureLogin()
+        {
+            if (proto.IsAuthenticated)
+            {
+                return;
+            }
+            await proto.AuthenticateWithPasswordAsync(
+                _bskyConfig.Auth.Username,
+                _bskyConfig.Auth.Password,
+                cancellationToken: cancellationToken
+            );
+        }
+
+        // Fetch wanted DIDs
+        List<string> wantedDids = [];
+        if (_ingestConfig.SingleCollection != null && _ingestConfig.Filter != null)
+        {
+            if (
+                _ingestConfig.Filter.TryGetValue(
+                    _ingestConfig.SingleCollection,
+                    out IngestFilterConfig? targetFilter
+                )
+            )
+            {
+                if (targetFilter.ListUris != null)
+                {
+                    foreach (var listUri in targetFilter.ListUris)
+                    {
+                        await EnsureLogin();
+
+                        var listDids = await bskyCache.GetListMembers(
+                            proto,
+                            FishyFlip.Models.ATUri.Create(listUri),
+                            cancellationToken
+                        );
+                        wantedDids.AddRange(listDids.Select(s => s.ToString()));
+                    }
+                }
+                if (targetFilter.Dids != null)
+                {
+                    wantedDids.AddRange(targetFilter.Dids);
+                }
+            }
+        }
+
+        if (wantedDids.Count == 0)
+        {
+            return null;
+        }
+
+        logger.LogInformation(
+            "Got list of wanted DIDs to filter ({wantedDidCount})",
+            wantedDids.Count
+        );
+
+        return wantedDids;
     }
 
     private async void ReadChannel(CancellationToken cancellationToken)

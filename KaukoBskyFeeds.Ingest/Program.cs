@@ -2,6 +2,7 @@
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Workers;
 using KaukoBskyFeeds.Shared;
+using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -36,6 +37,8 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
         b.Ignore(RelationalEventId.PendingModelChangesWarning);
     });
 });
+
+builder.Services.AddBskyServices();
 
 // builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();

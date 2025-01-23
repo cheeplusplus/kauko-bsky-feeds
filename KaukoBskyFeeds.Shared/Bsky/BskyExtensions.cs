@@ -1,5 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
+using FishyFlip;
 using FishyFlip.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Shared.Bsky;
 
@@ -10,6 +13,19 @@ public delegate Task<(T[]?, string?)> BskyPageableList<T>(
 
 public static class BskyExtensions
 {
+    public static IServiceCollection AddBskyServices(this IServiceCollection collection)
+    {
+        collection.AddMemoryCache();
+        collection.AddSingleton<IBskyCache, BskyCache>();
+        collection.AddSingleton(f =>
+        {
+            var logger = f.GetService<ILogger<ATProtocol>>();
+            return new ATProtocolBuilder().EnableAutoRenewSession(true).WithLogger(logger).Build();
+        });
+
+        return collection;
+    }
+
     public static async Task<IEnumerable<T>> GetAllResults<T>(
         BskyPageableList<T> callback,
         CancellationToken cancellationToken = default
