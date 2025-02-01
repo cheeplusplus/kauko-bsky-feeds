@@ -125,11 +125,11 @@ namespace KaukoBskyFeeds.Db.Migrations
                 }
             );
 
-            migrationBuilder.CreateIndex(
+            /*migrationBuilder.CreateIndex(
                 name: "IX_PostLikes_EventTime",
                 table: "PostLikes",
                 column: "EventTime"
-            );
+            );*/
 
             migrationBuilder.CreateIndex(
                 name: "IX_PostLikes_ParentDid_ParentRkey",
@@ -137,11 +137,11 @@ namespace KaukoBskyFeeds.Db.Migrations
                 columns: new[] { "ParentDid", "ParentRkey" }
             );
 
-            migrationBuilder.CreateIndex(
+            /*migrationBuilder.CreateIndex(
                 name: "IX_PostQuotePosts_EventTime",
                 table: "PostQuotePosts",
                 column: "EventTime"
-            );
+            );*/
 
             migrationBuilder.CreateIndex(
                 name: "IX_PostQuotePosts_ParentDid_ParentRkey",
@@ -149,11 +149,11 @@ namespace KaukoBskyFeeds.Db.Migrations
                 columns: new[] { "ParentDid", "ParentRkey" }
             );
 
-            migrationBuilder.CreateIndex(
+            /*migrationBuilder.CreateIndex(
                 name: "IX_PostReplies_EventTime",
                 table: "PostReplies",
                 column: "EventTime"
-            );
+            );*/
 
             migrationBuilder.CreateIndex(
                 name: "IX_PostReplies_ParentDid_ParentRkey",
@@ -161,11 +161,11 @@ namespace KaukoBskyFeeds.Db.Migrations
                 columns: new[] { "ParentDid", "ParentRkey" }
             );
 
-            migrationBuilder.CreateIndex(
+            /*migrationBuilder.CreateIndex(
                 name: "IX_PostReposts_EventTime",
                 table: "PostReposts",
                 column: "EventTime"
-            );
+            );*/
 
             migrationBuilder.CreateIndex(
                 name: "IX_PostReposts_ParentDid_ParentRkey",
@@ -173,11 +173,11 @@ namespace KaukoBskyFeeds.Db.Migrations
                 columns: new[] { "ParentDid", "ParentRkey" }
             );
 
-            migrationBuilder.CreateIndex(
+            /*migrationBuilder.CreateIndex(
                 name: "IX_Posts_EventTime",
                 table: "Posts",
                 column: "EventTime"
-            );
+            );*/
 
             // Custom view to make it easier to pull interaction counts
             migrationBuilder.Sql(
