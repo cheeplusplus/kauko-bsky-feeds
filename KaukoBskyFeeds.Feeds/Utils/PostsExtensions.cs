@@ -39,6 +39,30 @@ public static class PostExtensions
         return q;
     }
 
+    public static IQueryable<Post> ConcussiveFromCursor(
+        this DbSet<Post> postTable,
+        IEnumerable<string> dids,
+        int limit,
+        string? cursor
+    )
+    {
+        var root = postTable.LatestFromCursor(cursor);
+        IQueryable<Post>? result = null;
+        foreach (var did in dids)
+        {
+            var sq = root.Where(w => w.Did == did).OrderByDescending(o => o.EventTime).Take(limit);
+            if (result == null)
+            {
+                result = sq;
+            }
+            else
+            {
+                result = result.Concat(sq);
+            }
+        }
+        return Enumerable.Empty<Post>().AsQueryable();
+    }
+
     public static string GetCursor(this IPostRecord post)
     {
         return AsCursor(post.EventTime);
@@ -53,7 +77,8 @@ public static class PostExtensions
     {
         return post switch
         {
-            Post or PostQuotePost or PostReply => BskyConstants.COLLECTION_TYPE_POST,
+            Post or PostQuotePost or PostReply or PostWithInteractions =>
+                BskyConstants.COLLECTION_TYPE_POST,
             PostLike => BskyConstants.COLLECTION_TYPE_LIKE,
             PostRepost => BskyConstants.COLLECTION_TYPE_REPOST,
             _ => "?",

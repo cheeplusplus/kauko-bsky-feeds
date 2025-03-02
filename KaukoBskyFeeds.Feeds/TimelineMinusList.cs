@@ -111,7 +111,10 @@ public class TimelineMinusList(
             };
         });
 
-        var filteredFeed = judgedFeed.Where(w => w.Judgement.ShouldShow).Take(limit ?? 50);
+        var filteredFeed = judgedFeed
+            .Where(w => w.Judgement.ShouldShow)
+            .OrderByDescending(o => o.Cursor)
+            .Take(limit ?? 50);
         var feedOutput = filteredFeed
             .Select(s => new CustomSkeletonFeedPost(
                 s.PostUri,

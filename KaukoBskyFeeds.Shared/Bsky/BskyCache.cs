@@ -28,6 +28,11 @@ public interface IBskyCache
         ATDid user,
         CancellationToken cancellationToken = default
     );
+    Task<Dictionary<ATDid, FeedProfile?>> GetProfiles(
+        ATProtocol proto,
+        IEnumerable<ATDid> users,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCache
@@ -173,5 +178,42 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache) : IBskyCac
             },
             DEFAULT_OPTS
         );
+    }
+
+    public async Task<Dictionary<ATDid, FeedProfile?>> GetProfiles(
+        ATProtocol proto,
+        IEnumerable<ATDid> users,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (proto?.Session == null)
+        {
+            throw new NotLoggedInException();
+        }
+
+        // fetch all available cached entries first
+        var allProfiles = users.ToDictionary(
+            k => k,
+            v => cache.Get<FeedProfile>($"user_{v}_profile")
+        );
+
+        // fetch remaining profiles and cache them
+        var profilesToFetch = allProfiles.Where(w => w.Value == null).Select(s => s.Key).ToList();
+        if (profilesToFetch.Count > 0)
+        {
+            var freshProfilesRes = await proto.Actor.GetProfilesAsync(
+                profilesToFetch.ToArray(),
+                cancellationToken
+            );
+            var freshProfiles = freshProfilesRes.HandleResult();
+
+            foreach (var profile in freshProfiles?.Profiles ?? [])
+            {
+                allProfiles[profile.Did] = profile;
+                cache.Set($"user_{profile.Did}_profile", profile, DEFAULT_OPTS);
+            }
+        }
+
+        return allProfiles;
     }
 }

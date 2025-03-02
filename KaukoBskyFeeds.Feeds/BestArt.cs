@@ -1,6 +1,5 @@
 using FishyFlip;
 using FishyFlip.Models;
-using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Feeds.Config;
@@ -11,7 +10,6 @@ using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using Post = KaukoBskyFeeds.Db.Models.Post;
 
 namespace KaukoBskyFeeds.Feeds;
 
@@ -65,16 +63,14 @@ public class BestArt(
             postsQuery = postsQuery.Where(w => feedDids.Contains(w.Did));
         }
 
-        postsQuery = postsQuery
+        var finalPostList = await postsQuery
             .Where(w =>
                 w.ImageCount > 0
-                && (w.LikeCount + w.ReplyCount + w.RepostCount + w.QuotePostCount) > 3
+                && (w.LikeCount + w.QuotePostCount + w.ReplyCount + w.RepostCount)
+                    >= MIN_INTERACTIONS
             )
-            .OrderByDescending(o => o.LikeCount + o.ReplyCount + o.RepostCount + o.QuotePostCount)
-            .Take(FEED_LIMIT);
-
-        var finalPostList = await postsQuery
-            .Select(s => new PostIdealizer(s, s.TotalInteractions))
+            .OrderByDescending(o => o.LikeCount + o.QuotePostCount + o.ReplyCount + o.RepostCount)
+            .Take(FEED_LIMIT)
             .ToListAsync(cancellationToken);
 
         if (finalPostList.Count < 1)
@@ -88,23 +84,19 @@ public class BestArt(
         {
             // Balance likes and reposts to the artist's follower count
             var authorDids = finalPostList
-                .Select(s => s.AuthorDid)
+                .Select(s => s.GetAuthorDid())
                 .DistinctBy(s => s.ToString())
                 .ToArray();
-            var authorsHydratedReq = await proto.Actor.GetProfilesAsync(
-                authorDids,
-                cancellationToken
-            );
-            var authorsHydrated = authorsHydratedReq.HandleResult();
+            var authorProfiles = await bsCache.GetProfiles(proto, authorDids, cancellationToken);
 
             sortedFeed = finalPostList
                 .Select(s => new
                 {
-                    Author = authorsHydrated?.Profiles?.SingleOrDefault(h =>
-                        h.Did.ToString() == s.AuthorDid.ToString()
+                    Author = authorProfiles.Values.FirstOrDefault(f =>
+                        f?.Did.ToString() == s.Did.ToString()
                     ),
-                    s.Post,
-                    s.InteractionCount,
+                    Post = s,
+                    InteractionCount = s.TotalInteractions,
                 })
                 .Where(w => w.Author != null)
                 .Select(s => new SortedFeedResult(
@@ -117,22 +109,19 @@ public class BestArt(
         {
             // Sort by likes
             sortedFeed = finalPostList
-                .Select(s => new SortedFeedResult(s.Post, s.InteractionCount))
+                .Select(s => new SortedFeedResult(s, s.TotalInteractions))
                 .OrderByDescending(o => o.Score);
         }
 
-        var feedOutput = sortedFeed.Select(s => new CustomSkeletonFeedPost(
-            s.Post.ToUri(),
-            FeedContext: $"Score: {s.Score}"
-        ));
+        var feedOutput = sortedFeed
+            .Select(s => new CustomSkeletonFeedPost(
+                s.Post.ToUri(),
+                FeedContext: $"Score: {s.Score}"
+            ))
+            .ToList();
 
-        return new CustomSkeletonFeed(feedOutput.ToList(), null);
+        return new CustomSkeletonFeed(feedOutput, null);
     }
 
-    record PostIdealizer(IPostRecord Post, long InteractionCount)
-    {
-        public ATDid AuthorDid => Post.GetAuthorDid();
-    }
-
-    record SortedFeedResult(IPostRecord Post, float Score);
+    private record SortedFeedResult(IPostRecord Post, float Score);
 }
