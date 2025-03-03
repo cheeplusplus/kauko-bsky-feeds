@@ -6,7 +6,9 @@ public class IngestMetrics
 {
     public const string METRIC_METER_NAME = "KaukoBskyFeeds.Ingest";
     private readonly Counter<int> _ingestEventCounter;
-    private readonly Gauge<double> _ingestBacklog;
+    private readonly Gauge<double> _ingestBacklogGauge;
+    private readonly Counter<int> _saveCountCounter;
+    private readonly Histogram<double> _saveDurationHistogram;
 
     public IngestMetrics(IMeterFactory meterFactory)
     {
@@ -15,9 +17,18 @@ public class IngestMetrics
             $"{METRIC_METER_NAME}.records",
             description: "Ingest records"
         );
-        _ingestBacklog = meter.CreateGauge<double>(
+        _ingestBacklogGauge = meter.CreateGauge<double>(
             $"{METRIC_METER_NAME}.backlog",
             description: "Ingest backlog",
+            unit: "seconds"
+        );
+        _saveCountCounter = meter.CreateCounter<int>(
+            $"{METRIC_METER_NAME}.save.count",
+            description: "Records saved"
+        );
+        _saveDurationHistogram = meter.CreateHistogram<double>(
+            $"{METRIC_METER_NAME}.save.duration",
+            description: "Save duration",
             unit: "seconds"
         );
     }
@@ -29,6 +40,12 @@ public class IngestMetrics
         _ingestEventCounter.Add(1, tags);
 
         var timeDiff = DateTime.UtcNow - eventTime;
-        _ingestBacklog.Record(timeDiff.TotalSeconds, tags);
+        _ingestBacklogGauge.Record(timeDiff.TotalSeconds, tags);
+    }
+
+    public void TrackSave(int saveSize, TimeSpan saveDuration)
+    {
+        _saveCountCounter.Add(saveSize);
+        _saveDurationHistogram.Record(saveDuration.TotalSeconds);
     }
 }

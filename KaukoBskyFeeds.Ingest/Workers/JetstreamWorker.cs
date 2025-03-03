@@ -36,7 +36,7 @@ public class JetstreamWorker(
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
     private int _saveFailureCount = 0;
-    private readonly BulkInsertHolder _insertHolder = new(db);
+    private readonly BulkInsertHolder _insertHolder = new(db, metrics);
 
     private int SaveMaxSec => _ingestConfig.SaveMaxSec;
     private int SaveMaxSize => _ingestConfig.SaveMaxSize;
@@ -523,7 +523,7 @@ public class JetstreamWorker(
     }
 }
 
-class BulkInsertHolder(FeedDbContext db)
+class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
 {
     private readonly Dictionary<PostRecordRef, Post> Posts = [];
     private readonly List<IQueryable<Post>> PostDeletes = [];
@@ -605,6 +605,7 @@ class BulkInsertHolder(FeedDbContext db)
 
     public async Task<(int, int)> Commit(CancellationToken cancellationToken)
     {
+        var startTime = DateTime.Now;
         using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         await db.BulkInsertOrUpdateAsync(Posts.Values, cancellationToken: cancellationToken);
@@ -660,6 +661,8 @@ class BulkInsertHolder(FeedDbContext db)
         PostRepostDeletes.Clear();
 
         db.ChangeTracker.Clear();
+
+        metrics.TrackSave(upserts, DateTime.Now - startTime);
 
         return (upserts, deletes);
     }
