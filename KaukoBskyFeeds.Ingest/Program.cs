@@ -57,12 +57,12 @@ builder
     .WithMetrics(b =>
         b.AddPrometheusHttpListener(options =>
             {
-                var uriPrefixes = builder.Configuration.GetValue<string[]>(
-                    "IngestConfig:MetricsUriPrefixes"
+                var uriPrefix = builder.Configuration.GetValue<string>(
+                    "IngestConfig:MetricsUriPrefix"
                 );
-                if (uriPrefixes != null)
+                if (uriPrefix != null)
                 {
-                    options.UriPrefixes = uriPrefixes;
+                    options.UriPrefixes = [uriPrefix];
                 }
             })
             .AddMeter(

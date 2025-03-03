@@ -37,12 +37,9 @@
                         }
                     }
                 },
-                "MetricsUriPrefixes": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "format": "uri"
-                    }
+                "MetricsUriPrefix": {
+                    "type": "string",
+                    "format": "uri"
                 }
             }
         }
