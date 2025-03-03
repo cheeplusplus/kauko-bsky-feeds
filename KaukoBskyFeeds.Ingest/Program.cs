@@ -56,7 +56,7 @@ builder
     )
     .WithMetrics(builder =>
         builder
-            .AddPrometheusHttpListener()
+            .AddPrometheusHttpListener(options => options.UriPrefixes = ["http://0.0.0.0:9464/"])
             .AddMeter(
                 "System.Net.Http",
                 "System.Runtime",
