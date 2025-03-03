@@ -51,12 +51,20 @@ builder.Services.AddSingleton<IngestMetrics>();
 builder.Services.AddSingleton<JetstreamMetrics>();
 builder
     .Services.AddOpenTelemetry()
-    .ConfigureResource(builder =>
-        builder.AddService("KaukoBskyFeeds.Ingest", serviceNamespace: "KaukoBskyFeeds")
+    .ConfigureResource(b =>
+        b.AddService("KaukoBskyFeeds.Ingest", serviceNamespace: "KaukoBskyFeeds")
     )
-    .WithMetrics(builder =>
-        builder
-            .AddPrometheusHttpListener(options => options.UriPrefixes = ["http://0.0.0.0:9464/"])
+    .WithMetrics(b =>
+        b.AddPrometheusHttpListener(options =>
+            {
+                var uriPrefixes = builder.Configuration.GetValue<string[]>(
+                    "IngestConfig:MetricsUriPrefixes"
+                );
+                if (uriPrefixes != null)
+                {
+                    options.UriPrefixes = uriPrefixes;
+                }
+            })
             .AddMeter(
                 "System.Net.Http",
                 "System.Runtime",
