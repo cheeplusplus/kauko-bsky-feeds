@@ -648,6 +648,15 @@ class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
             + PostReplies.Count
             + PostReposts.Count;
 
+        metrics.TrackSave(
+            DateTime.Now - startTime,
+            Posts.Count,
+            PostLikes.Count,
+            PostQuotePosts.Count,
+            PostReplies.Count,
+            PostReposts.Count
+        );
+
         // Clear after committing the transaction successfully
         Posts.Clear();
         PostDeletes.Clear();
@@ -661,8 +670,6 @@ class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
         PostRepostDeletes.Clear();
 
         db.ChangeTracker.Clear();
-
-        metrics.TrackSave(upserts, DateTime.Now - startTime);
 
         return (upserts, deletes);
     }

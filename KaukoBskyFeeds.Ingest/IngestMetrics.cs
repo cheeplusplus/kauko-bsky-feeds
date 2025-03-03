@@ -43,9 +43,22 @@ public class IngestMetrics
         _ingestBacklogGauge.Record(timeDiff.TotalSeconds, tags);
     }
 
-    public void TrackSave(int saveSize, TimeSpan saveDuration)
+    public void TrackSave(
+        TimeSpan saveDuration,
+        int posts,
+        int likes,
+        int quotePosts,
+        int postReplies,
+        int postReposts
+    )
     {
-        _saveCountCounter.Add(saveSize);
+        void add(string name, int size) =>
+            _saveCountCounter.Add(size, new KeyValuePair<string, object?>("table.name", name));
+        add("Post", posts);
+        add("Like", likes);
+        add("QuotePost", quotePosts);
+        add("PostReply", postReplies);
+        add("PostRepost", postReposts);
         _saveDurationHistogram.Record(saveDuration.TotalSeconds);
     }
 }
