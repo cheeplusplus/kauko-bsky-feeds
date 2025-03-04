@@ -22,8 +22,8 @@ public class BestArt(
     IBskyCache bsCache
 ) : IFeed
 {
-    private const int FEED_LIMIT = 25; // restriction on artist did fetch
-    private const int MIN_INTERACTIONS = 3;
+    private int FEED_LIMIT => feedConfig.FeedLimit;
+    private int MIN_INTERACTIONS => feedConfig.MinInteractions;
 
     public BaseFeedConfig Config => feedConfig;
 
@@ -34,18 +34,25 @@ public class BestArt(
         CancellationToken cancellationToken = default
     )
     {
-        // TODO: Don't pass the limit into the uncached func, always fetch with max and limit after the cache
-        return await mCache.GetOrCreateAsync(
+        var result =
+            await mCache.GetOrCreateAsync(
                 $"BestArtFeed|list_{feedConfig.RestrictToListUri ?? "all"}|bal_{feedConfig.BalanceInteractions ?? false}",
                 async (opts) =>
                 {
                     return await GetFeedSkeletonUncached(cancellationToken);
                 },
                 BskyCache.DEFAULT_OPTS
-            ) ?? new CustomSkeletonFeed([], null);
+            ) ?? [];
+
+        // Limit artificially so we can reuse the cache
+        if (limit.HasValue)
+        {
+            result = result.Take(limit.Value);
+        }
+        return new CustomSkeletonFeed(result, null);
     }
 
-    private async Task<CustomSkeletonFeed> GetFeedSkeletonUncached(
+    private async Task<IEnumerable<CustomSkeletonFeedPost>> GetFeedSkeletonUncached(
         CancellationToken cancellationToken = default
     )
     {
@@ -76,7 +83,7 @@ public class BestArt(
         if (finalPostList.Count < 1)
         {
             // Exit early
-            return new CustomSkeletonFeed([], null);
+            return [];
         }
 
         IEnumerable<SortedFeedResult> sortedFeed;
@@ -120,7 +127,7 @@ public class BestArt(
             ))
             .ToList();
 
-        return new CustomSkeletonFeed(feedOutput, null);
+        return feedOutput;
     }
 
     private record SortedFeedResult(IPostRecord Post, float Score);

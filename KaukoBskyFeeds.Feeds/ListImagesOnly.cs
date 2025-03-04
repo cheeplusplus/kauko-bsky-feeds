@@ -43,7 +43,11 @@ public class ListImagesOnly(
         string? newCursor = null;
         if (feedConfig.FetchTimeline)
         {
-            var postTlRes = await proto.Feed.GetListFeedAsync(listUri, 50, cancellationToken);
+            var postTlRes = await proto.Feed.GetListFeedAsync(
+                listUri,
+                limit ?? 50,
+                cancellationToken
+            );
             var postTl = postTlRes.HandleResult();
             posts = postTl
                 .Feed.Where(w => w.Reason == null)
@@ -58,8 +62,14 @@ public class ListImagesOnly(
             posts = await db
                 .Posts.LatestFromCursor(cursor)
                 .Where(filter)
-                .Take(limit ?? 50)
+                // Always take the same amount, postgres is being weird about response time with lower limits
+                .Take(50)
                 .ToListAsync(cancellationToken);
+            if (limit.HasValue)
+            {
+                // Limit artificially to keep the database from being weirdly slow
+                posts = posts[..limit.Value];
+            }
             newCursor = posts.LastOrDefault()?.GetCursor();
         }
 

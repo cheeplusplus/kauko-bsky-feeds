@@ -267,6 +267,18 @@
                             "description": "Balance interactions to follower count?",
                             "type": "boolean"
                         },
+                        "FeedLimit": {
+                            "description": "Number of results to show in the feed",
+                            "type": "number",
+                            "minimum": 1,
+                            "default": 25
+                        },
+                        "MinInteractions": {
+                            "description": "Minimum interactions required to consider post",
+                            "type": "number",
+                            "minimum": 1,
+                            "default": 3
+                        },
                         "RestrictToListUri": {
                             "description": "Optional list URI used for filtering",
                             "$ref": "#/definitions/atUriForList"

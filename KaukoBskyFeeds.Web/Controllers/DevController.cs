@@ -72,6 +72,7 @@ public class DevController(
             cancellationToken
         );
 
+        // 25 is the limit for GetPostsAsync
         var feedsInSize = feedSkel.Feed.Take(25).Select(s => new ATUri(s.Post));
         if (!feedsInSize.Any())
         {
