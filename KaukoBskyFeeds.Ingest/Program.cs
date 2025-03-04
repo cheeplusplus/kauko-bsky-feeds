@@ -4,6 +4,7 @@ using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Workers;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
+using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;

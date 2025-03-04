@@ -1,6 +1,8 @@
 using FishyFlip;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Shared;
+using KaukoBskyFeeds.Shared.Metrics;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 
 namespace KaukoBskyFeeds.Web.Controllers;
@@ -28,5 +30,16 @@ public abstract class BskyControllerBase(IConfiguration configuration, ATProtoco
                 )
                 ?? throw new Exception("Failed to login");
         }
+    }
+
+    protected void AddRequestTag(string tag, string value)
+    {
+        var tagsFeature = HttpContext.Features.Get<IHttpMetricsTagsFeature>();
+        tagsFeature?.Tags.Add(new KeyValuePair<string, object?>(tag, value));
+    }
+
+    protected void AddFeedTag(string feedUri)
+    {
+        this.AddRequestTag(Tags.ATPROTO_FEED_NAME, Path.GetFileName(feedUri));
     }
 }

@@ -28,6 +28,8 @@ public class XrpcController(
         CancellationToken cancellationToken = default
     )
     {
+        AddFeedTag(feed);
+
         var feedInstance = feedRegistry.GetFeedInstance(sp, feed);
         if (feedInstance == null)
         {

@@ -3,6 +3,7 @@ using System.Reactive.Linq;
 using System.Text.Json;
 using System.Threading.Channels;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
+using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.Extensions.Logging;
 using Websocket.Client;
 using ZstdSharp;

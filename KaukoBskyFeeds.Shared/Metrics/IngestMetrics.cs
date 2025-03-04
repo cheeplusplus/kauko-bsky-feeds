@@ -1,6 +1,6 @@
 using System.Diagnostics.Metrics;
 
-namespace KaukoBskyFeeds.Ingest;
+namespace KaukoBskyFeeds.Shared.Metrics;
 
 public class IngestMetrics
 {
@@ -35,7 +35,7 @@ public class IngestMetrics
 
     public void IngestEvent(string collection, DateTime eventTime)
     {
-        var tags = new KeyValuePair<string, object?>("atproto.collection", collection);
+        var tags = new KeyValuePair<string, object?>(Tags.ATPROTO_COLLECTION, collection);
 
         _ingestEventCounter.Add(1, tags);
 
@@ -53,7 +53,10 @@ public class IngestMetrics
     )
     {
         void add(string name, int size) =>
-            _saveCountCounter.Add(size, new KeyValuePair<string, object?>("table.name", name));
+            _saveCountCounter.Add(
+                size,
+                new KeyValuePair<string, object?>(Tags.DB_TABLE_NAME, name)
+            );
         add("Post", posts);
         add("Like", likes);
         add("QuotePost", quotePosts);

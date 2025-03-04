@@ -1,6 +1,6 @@
 using System.Diagnostics.Metrics;
 
-namespace KaukoBskyFeeds.Ingest.Jetstream;
+namespace KaukoBskyFeeds.Shared.Metrics;
 
 public class JetstreamMetrics
 {
@@ -52,15 +52,15 @@ public class JetstreamMetrics
 
     public void WsReconnect(string host)
     {
-        _reconnectCounter.Add(1, new KeyValuePair<string, object?>("ws.host", host));
+        _reconnectCounter.Add(1, new KeyValuePair<string, object?>(Tags.WEBSOCKET_HOST, host));
     }
 
     public void WsError(string host, string errorClass)
     {
         _connectionErrorCounter.Add(
             1,
-            new KeyValuePair<string, object?>("ws.host", host),
-            new KeyValuePair<string, object?>("error.class", errorClass)
+            new KeyValuePair<string, object?>(Tags.WEBSOCKET_HOST, host),
+            new KeyValuePair<string, object?>(Tags.ERROR_CLASS, errorClass)
         );
     }
 
@@ -76,14 +76,17 @@ public class JetstreamMetrics
 
     public void SawEventGenericError(string errorClass)
     {
-        _eventRawErrorCounter.Add(1, new KeyValuePair<string, object?>("error.class", errorClass));
+        _eventRawErrorCounter.Add(
+            1,
+            new KeyValuePair<string, object?>(Tags.ERROR_CLASS, errorClass)
+        );
     }
 
     public void SawEventParsed(string collection)
     {
         _eventParsedCounter.Add(
             1,
-            new KeyValuePair<string, object?>("atproto.collection", collection)
+            new KeyValuePair<string, object?>(Tags.ATPROTO_COLLECTION, collection)
         );
     }
 
@@ -91,7 +94,7 @@ public class JetstreamMetrics
     {
         _eventParseErrorCounter.Add(
             1,
-            new KeyValuePair<string, object?>("error.class", errorClass)
+            new KeyValuePair<string, object?>(Tags.ERROR_CLASS, errorClass)
         );
     }
 }

@@ -37,6 +37,8 @@ public class DevController(
         CancellationToken cancellationToken = default
     )
     {
+        AddFeedTag(feed);
+
         if (!DevEndpointsEnabled)
         {
             return TypedResults.NotFound();

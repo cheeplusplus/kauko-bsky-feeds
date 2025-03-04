@@ -6,6 +6,7 @@ using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
+using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;

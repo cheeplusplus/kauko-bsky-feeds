@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text.Json;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
+using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.Extensions.Logging;
 using ZstdSharp;
 
