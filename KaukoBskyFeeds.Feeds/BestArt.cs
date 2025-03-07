@@ -49,6 +49,8 @@ public class BestArt(
         {
             result = result.Take(limit.Value);
         }
+        // we never have a cursor because you can't paginate this
+        // technically you could but it's annoying
         return new CustomSkeletonFeed(result, null);
     }
 
@@ -89,7 +91,7 @@ public class BestArt(
         IEnumerable<SortedFeedResult> sortedFeed;
         if (feedConfig.BalanceInteractions ?? false)
         {
-            // Balance likes and reposts to the artist's follower count
+            // Create a 'balanced' feed negating some factors like interactions, follower count, and post age
             var authorDids = finalPostList
                 .Select(s => s.GetAuthorDid())
                 .DistinctBy(s => s.ToString())
@@ -103,13 +105,9 @@ public class BestArt(
                         f?.Did.ToString() == s.Did.ToString()
                     ),
                     Post = s,
-                    InteractionCount = s.TotalInteractions,
                 })
                 .Where(w => w.Author != null)
-                .Select(s => new SortedFeedResult(
-                    s.Post,
-                    (float)s.InteractionCount / s.Author!.FollowersCount
-                ))
+                .Select(s => new SortedFeedResult(s.Post, ScorePostBalanced(s.Post, s.Author!)))
                 .OrderByDescending(o => o.Score);
         }
         else
@@ -128,6 +126,24 @@ public class BestArt(
             .ToList();
 
         return feedOutput;
+    }
+
+    private static float ScorePostBalanced(PostWithInteractions post, FeedProfile author)
+    {
+        // We're attempting to score a post in a 'fair' way that makes more things bubble up
+        // where we don't just get things that are from popular artists or have had more time to get faves
+
+        // Attempt to create a neutral score where the number of followers balances out the number of interactions
+        // More interactions than followers is great
+        var followerNeutralScore = (float)post.TotalInteractions / author.FollowersCount;
+
+        // Attempt to balance things out for time so we see newer stuff too
+        // This shouldn't be as strong an influence as follower count
+        var postAge = (DateTime.UtcNow - post.CreatedAt).TotalSeconds;
+        var timeScore = 1 / (float)(postAge / TimeSpan.FromDays(3).TotalSeconds);
+        var timeNeutralScore = followerNeutralScore * timeScore;
+
+        return timeNeutralScore;
     }
 
     private record SortedFeedResult(IPostRecord Post, float Score);
