@@ -9,6 +9,7 @@ using KaukoBskyFeeds.Feeds.Utils;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
+using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
 
 namespace KaukoBskyFeeds.Feeds;
@@ -18,6 +19,7 @@ public class ListImagesOnly(
     ATProtocol proto,
     ListImagesOnlyFeedConfig feedConfig,
     FeedDbContext db,
+    BskyMetrics bskyMetrics,
     IBskyCache cache
 ) : IFeed
 {
@@ -43,11 +45,9 @@ public class ListImagesOnly(
         string? newCursor = null;
         if (feedConfig.FetchTimeline)
         {
-            var postTlRes = await proto.Feed.GetListFeedAsync(
-                listUri,
-                limit ?? 50,
-                cancellationToken
-            );
+            var postTlRes = await proto
+                .Feed.GetListFeedAsync(listUri, limit ?? 50, cancellationToken)
+                .Record(bskyMetrics, "app.bsky.feed.getListFeed");
             var postTl = postTlRes.HandleResult();
             posts = postTl
                 .Feed.Where(w => w.Reason == null)

@@ -48,6 +48,7 @@ builder.Services.AddBskyServices();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();
 builder.Services.AddHostedService<JetstreamWorker>();
 
+builder.Services.AddSingleton<BskyMetrics>();
 builder.Services.AddSingleton<IngestMetrics>();
 builder.Services.AddSingleton<JetstreamMetrics>();
 builder
@@ -70,6 +71,7 @@ builder
                 "System.Net.Http",
                 "System.Runtime",
                 "Microsoft.EntityFrameworkCore",
+                BskyMetrics.METRIC_METER_NAME,
                 IngestMetrics.METRIC_METER_NAME,
                 JetstreamMetrics.METRIC_METER_NAME
             )

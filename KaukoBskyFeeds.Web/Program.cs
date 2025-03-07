@@ -2,6 +2,7 @@ using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
+using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
@@ -32,6 +33,7 @@ builder.Services.AddBskyServices();
 builder.Services.AddSingleton<FeedRegistry>();
 
 builder.Services.AddHealthChecks();
+builder.Services.AddSingleton<BskyMetrics>();
 builder
     .Services.AddOpenTelemetry()
     .WithMetrics(builder =>
@@ -41,7 +43,8 @@ builder
                 "System.Net.Http",
                 "System.Runtime",
                 "Microsoft.EntityFrameworkCore",
-                "Microsoft.Extensions.Diagnostics.HealthChecks"
+                "Microsoft.Extensions.Diagnostics.HealthChecks",
+                BskyMetrics.METRIC_METER_NAME
             )
             .AddAspNetCoreInstrumentation()
     );

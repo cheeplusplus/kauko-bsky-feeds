@@ -9,6 +9,7 @@ using KaukoBskyFeeds.Feeds.Utils;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
+using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Post = KaukoBskyFeeds.Db.Models.Post;
@@ -21,6 +22,7 @@ public class TimelineMinusList(
     ATProtocol proto,
     TimelineMinusListFeedConfig feedConfig,
     FeedDbContext db,
+    BskyMetrics bskyMetrics,
     IBskyCache cache
 ) : IFeed
 {
@@ -59,10 +61,9 @@ public class TimelineMinusList(
         string? newCursor = null;
         if (feedConfig.FetchTimeline)
         {
-            var postTlRes = await proto.Feed.GetTimelineAsync(
-                cursor: cursor,
-                cancellationToken: cancellationToken
-            );
+            var postTlRes = await proto
+                .Feed.GetTimelineAsync(cursor: cursor, cancellationToken: cancellationToken)
+                .Record(bskyMetrics, "app.bsky.feed.getTimeline");
             var postTl = postTlRes.HandleResult();
             posts = postTl.Feed.Where(w => w.Reason == null).Select(s => s.ToDbPost()).ToList();
             newCursor = postTl.Cursor;
