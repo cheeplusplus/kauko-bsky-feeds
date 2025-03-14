@@ -11,6 +11,7 @@ using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace KaukoBskyFeeds.Feeds;
 
@@ -20,7 +21,9 @@ public class ListImagesOnly(
     ListImagesOnlyFeedConfig feedConfig,
     FeedDbContext db,
     BskyMetrics bskyMetrics,
-    IBskyCache cache
+    IMemoryCache mCache,
+    IBskyCache bsCache,
+    FeedInstanceMetadata feedMeta
 ) : IFeed
 {
     public BaseFeedConfig Config => feedConfig;
@@ -33,10 +36,10 @@ public class ListImagesOnly(
     )
     {
         var listUri = new ATUri(feedConfig.ListUri);
-        var listMemberDids = await cache.GetListMembers(proto, listUri, cancellationToken);
+        var listMemberDids = await bsCache.GetListMembers(proto, listUri, cancellationToken);
         var feedDids = listMemberDids.Select(s => s.Handler);
 
-        Expression<Func<Db.Models.Post, bool>> filter = (Db.Models.Post w) =>
+        Expression<Func<Db.Models.Post, bool>> filter = w =>
             feedDids.Contains(w.Did)
             && w.ImageCount > 0
             && (w.ReplyParentUri == null || w.ReplyParentUri.StartsWith("at://" + w.Did));
@@ -59,12 +62,20 @@ public class ListImagesOnly(
         }
         else
         {
-            posts = await db
-                .Posts.LatestFromCursor(cursor)
-                .Where(filter)
-                // Always take the same amount, postgres is being weird about response time with lower limits
-                .Take(50)
-                .ToListAsync(cancellationToken);
+            posts =
+                await mCache.GetOrCreateAsync(
+                    $"feed_db_{feedMeta.FeedUri}|{cursor}",
+                    async (_) =>
+                    {
+                        return await db
+                            .Posts.LatestFromCursor(cursor)
+                            .Where(filter)
+                            // Always take the same amount, postgres is being weird about response time with lower limits
+                            .Take(50)
+                            .ToListAsync(cancellationToken);
+                    },
+                    BskyCache.QUICK_OPTS
+                ) ?? [];
             if (limit.HasValue)
             {
                 // Limit artificially to keep the database from being weirdly slow

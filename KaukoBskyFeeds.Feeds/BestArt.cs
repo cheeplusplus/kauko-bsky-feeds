@@ -19,7 +19,8 @@ public class BestArt(
     BestArtFeedConfig feedConfig,
     FeedDbContext db,
     IMemoryCache mCache,
-    IBskyCache bsCache
+    IBskyCache bsCache,
+    FeedInstanceMetadata feedMeta
 ) : IFeed
 {
     private int FEED_LIMIT => feedConfig.FeedLimit;
@@ -31,30 +32,6 @@ public class BestArt(
         ATDid? requestor,
         int? limit,
         string? cursor,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var result =
-            await mCache.GetOrCreateAsync(
-                $"BestArtFeed|list_{feedConfig.RestrictToListUri ?? "all"}|bal_{feedConfig.BalanceInteractions ?? false}",
-                async (opts) =>
-                {
-                    return await GetFeedSkeletonUncached(cancellationToken);
-                },
-                BskyCache.DEFAULT_OPTS
-            ) ?? [];
-
-        // Limit artificially so we can reuse the cache
-        if (limit.HasValue)
-        {
-            result = result.Take(limit.Value);
-        }
-        // we never have a cursor because you can't paginate this
-        // technically you could but it's annoying
-        return new CustomSkeletonFeed(result, null);
-    }
-
-    private async Task<IEnumerable<CustomSkeletonFeedPost>> GetFeedSkeletonUncached(
         CancellationToken cancellationToken = default
     )
     {
@@ -72,20 +49,30 @@ public class BestArt(
             postsQuery = postsQuery.Where(w => feedDids.Contains(w.Did));
         }
 
-        var finalPostList = await postsQuery
-            .Where(w =>
-                w.ImageCount > 0
-                && (w.LikeCount + w.QuotePostCount + w.ReplyCount + w.RepostCount)
-                    >= MIN_INTERACTIONS
-            )
-            .OrderByDescending(o => o.LikeCount + o.QuotePostCount + o.ReplyCount + o.RepostCount)
-            .Take(FEED_LIMIT)
-            .ToListAsync(cancellationToken);
+        var finalPostList =
+            await mCache.GetOrCreateAsync(
+                $"feed_db_{feedMeta.FeedUri}",
+                async (_) =>
+                {
+                    return await postsQuery
+                        .Where(w =>
+                            w.ImageCount > 0
+                            && (w.LikeCount + w.QuotePostCount + w.ReplyCount + w.RepostCount)
+                                >= MIN_INTERACTIONS
+                        )
+                        .OrderByDescending(o =>
+                            o.LikeCount + o.QuotePostCount + o.ReplyCount + o.RepostCount
+                        )
+                        .Take(FEED_LIMIT)
+                        .ToListAsync(cancellationToken);
+                },
+                BskyCache.DEFAULT_OPTS
+            ) ?? [];
 
         if (finalPostList.Count < 1)
         {
             // Exit early
-            return [];
+            return new CustomSkeletonFeed([], null);
         }
 
         IEnumerable<SortedFeedResult> sortedFeed;
@@ -118,6 +105,11 @@ public class BestArt(
                 .OrderByDescending(o => o.Score);
         }
 
+        if (limit.HasValue)
+        {
+            sortedFeed = sortedFeed.Take(limit.Value);
+        }
+
         var feedOutput = sortedFeed
             .Select(s => new CustomSkeletonFeedPost(
                 s.Post.ToUri(),
@@ -125,7 +117,7 @@ public class BestArt(
             ))
             .ToList();
 
-        return feedOutput;
+        return new CustomSkeletonFeed(feedOutput, null);
     }
 
     private static float ScorePostBalanced(PostWithInteractions post, FeedProfile author)

@@ -11,6 +11,7 @@ using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Bsky.Models;
 using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Post = KaukoBskyFeeds.Db.Models.Post;
 
@@ -23,7 +24,9 @@ public class TimelineMinusList(
     TimelineMinusListFeedConfig feedConfig,
     FeedDbContext db,
     BskyMetrics bskyMetrics,
-    IBskyCache cache
+    IMemoryCache mCache,
+    IBskyCache bsCache,
+    FeedInstanceMetadata feedMeta
 ) : IFeed
 {
     private readonly ATDidComparer _atDidComparer = new();
@@ -48,10 +51,10 @@ public class TimelineMinusList(
             throw new FeedProhibitedException();
         }
 
-        var followingList = await cache.GetFollowing(proto, proto.Session.Did, cancellationToken);
+        var followingList = await bsCache.GetFollowing(proto, proto.Session.Did, cancellationToken);
         var followingListStr = followingList.Select(s => s.Handler);
         var mutualsDids = await GetMutuals(cancellationToken);
-        var listMemberDids = await cache.GetListMembers(
+        var listMemberDids = await bsCache.GetListMembers(
             proto,
             new ATUri(feedConfig.ListUri),
             cancellationToken
@@ -70,12 +73,20 @@ public class TimelineMinusList(
         }
         else
         {
-            posts = await db
-                .Posts.LatestFromCursor(cursor)
-                .Where(w => followingListStr.Contains(w.Did))
-                // use a large limit - assume we need to fetch more than we're going to show
-                .Take(100)
-                .ToListAsync(cancellationToken);
+            posts =
+                await mCache.GetOrCreateAsync(
+                    $"feed_db_{feedMeta.FeedUri}|{cursor}",
+                    async (_) =>
+                    {
+                        return await db
+                            .Posts.LatestFromCursor(cursor)
+                            .Where(w => followingListStr.Contains(w.Did))
+                            // use a large limit - assume we need to fetch more than we're going to show
+                            .Take(100)
+                            .ToListAsync(cancellationToken);
+                    },
+                    BskyCache.QUICK_OPTS
+                ) ?? [];
         }
 
         if (posts == null || posts.Count < 1 || cancellationToken.IsCancellationRequested)
@@ -136,8 +147,8 @@ public class TimelineMinusList(
             throw new NotLoggedInException();
         }
 
-        var followingList = await cache.GetFollowing(proto, proto.Session.Did, cancellationToken);
-        var followersList = await cache.GetFollowers(proto, proto.Session.Did, cancellationToken);
+        var followingList = await bsCache.GetFollowing(proto, proto.Session.Did, cancellationToken);
+        var followersList = await bsCache.GetFollowers(proto, proto.Session.Did, cancellationToken);
 
         // For some reason the comparer isn't working so do this the hard way
         return followingList

@@ -54,10 +54,6 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
     {
         AbsoluteExpirationRelativeToNow = NORMAL_CACHE_DURATION,
     };
-    public static readonly MemoryCacheEntryOptions SHORT_OPTS = new()
-    {
-        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1),
-    };
     public static readonly MemoryCacheEntryOptions QUICK_OPTS = new()
     {
         AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(10),
@@ -128,7 +124,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                         ATUri = post.Uri,
                         Post = (PostView?)post,
                     };
-                    cache.Set($"post_{post.Uri}", post, SHORT_OPTS);
+                    cache.Set($"post_{post.Uri}", post, DEFAULT_OPTS);
                 }
             }
         }

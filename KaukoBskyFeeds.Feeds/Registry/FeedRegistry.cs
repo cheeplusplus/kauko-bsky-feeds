@@ -1,5 +1,6 @@
 using System.Reflection;
 using FishyFlip;
+using FishyFlip.Models;
 using KaukoBskyFeeds.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +11,7 @@ public class FeedRegistry
 {
     private readonly IConfigurationSection _bskyConfigSection;
     private readonly Dictionary<string, (Type, Type)> _feedTypes;
-    private readonly List<IndividualFeed> _feeds;
+    private readonly List<RegisteredFeed> _feeds;
 
     public FeedRegistry(IConfiguration configuration)
     {
@@ -28,13 +29,13 @@ public class FeedRegistry
 
         // Combine configurations
         _feeds = bskyConfig
-            .FeedProcessors.Select(feedCfg => new IndividualFeed(
+            .FeedProcessors.Select(feedCfg => new RegisteredFeed(
                 feedCfg.Value.Type,
                 _feedTypes[feedCfg.Value.Type].Item1,
                 _bskyConfigSection
                     .GetRequiredSection($"FeedProcessors:{feedCfg.Key}:Config")
                     .Get(_feedTypes[feedCfg.Value.Type].Item2)
-                    ?? throw new Exception("Failed to parse feed configuration"),
+                    ?? throw new Exception("Failed to parse feed configuration of " + feedCfg.Key),
                 feedCfg.Value.Config,
                 feedCfg.Key,
                 $"{bskyConfig.Identity.PublishedAtUri}/{Constants.FeedType.Generator}/{feedCfg.Key}"
@@ -42,7 +43,7 @@ public class FeedRegistry
             .ToList();
     }
 
-    public IEnumerable<IndividualFeed> AllFeeds => _feeds;
+    public IEnumerable<RegisteredFeed> AllFeeds => _feeds;
     public IEnumerable<string> AllFeedUris => _feeds.Select(s => s.FeedUri);
 
     public IFeed? GetFeedInstance(IServiceProvider sp, string feedUri)
@@ -53,11 +54,23 @@ public class FeedRegistry
             return null;
         }
 
-        var inst = ActivatorUtilities.CreateInstance(sp, indvFeed.FeedClass, indvFeed.FeedConfig);
-        return inst as IFeed;
+        var feedMeta = new FeedInstanceMetadata(ATUri.Create(feedUri));
+
+        var inst = ActivatorUtilities.CreateInstance(
+            sp,
+            indvFeed.FeedClass,
+            indvFeed.FeedConfig,
+            feedMeta
+        );
+
+        if (inst is not IFeed feedInst)
+        {
+            throw new Exception("Failed to activate feed instance for " + feedUri);
+        }
+        return feedInst;
     }
 
-    public record IndividualFeed(
+    public record RegisteredFeed(
         string FeedType,
         Type FeedClass,
         object FeedConfig,
