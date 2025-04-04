@@ -104,6 +104,9 @@
                             },
                             {
                                 "$ref": "#/definitions/FeedProcessorBestArt"
+                            },
+                            {
+                                "$ref": "#/definitions/FeedProcessorLikesImagesOnly"
                             }
                         ]
                     },
@@ -282,6 +285,24 @@
                         "RestrictToListUri": {
                             "description": "Optional list URI used for filtering",
                             "$ref": "#/definitions/atUriForList"
+                        }
+                    }
+                }
+            }
+        },
+        "FeedProcessorLikesImagesOnly": {
+            "type": "object",
+            "properties": {
+                "Type": {
+                    "type": "string",
+                    "const": "LikesImagesOnly"
+                },
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "FetchTimeline": {
+                            "description": "Fetch the timeline instead of using the cache",
+                            "type": "boolean"
                         }
                     }
                 }

@@ -127,27 +127,27 @@ public static class PostExtensions
         return atUri != null ? ATDid.Create(atUri.Hostname) : null;
     }
 
-    public static Post ToDbPost(this FishyFlip.Models.FeedViewPost feedPost)
+    public static Post ToDbPost(this FishyFlip.Models.PostView postView)
     {
-        if (feedPost.Post.Record == null)
+        if (postView.Record == null)
         {
             throw new Exception("Not a record?");
         }
 
-        var did = feedPost.Post.Uri.Did?.ToString() ?? throw new Exception("Failed to parse URI");
-        var rkey = feedPost.Post.Uri.Rkey;
+        var did = postView.Uri.Did?.ToString() ?? throw new Exception("Failed to parse URI");
+        var rkey = postView.Uri.Rkey;
 
         var imageCount = 0;
-        if (feedPost.Post.Embed is FishyFlip.Models.ImageViewEmbed ie && ie.Images != null)
+        if (postView.Embed is FishyFlip.Models.ImageViewEmbed ie && ie.Images != null)
         {
             imageCount = ie.Images.Length;
         }
         string? embedRecordUri = null;
-        if (feedPost.Post.Embed is FishyFlip.Models.RecordViewEmbed rve)
+        if (postView.Embed is FishyFlip.Models.RecordViewEmbed rve)
         {
             embedRecordUri = rve.Record.Uri.ToString();
         }
-        if (feedPost.Post.Embed is FishyFlip.Models.RecordWithMediaViewEmbed rme)
+        if (postView.Embed is FishyFlip.Models.RecordWithMediaViewEmbed rme)
         {
             embedRecordUri = rme.Record?.Record.Uri.ToString();
         }
@@ -156,15 +156,24 @@ public static class PostExtensions
         {
             Did = did,
             Rkey = rkey,
-            EventTime = feedPost.Post.IndexedAt,
-            EventTimeUs = feedPost.Post.IndexedAt.ToMicroseconds(),
-            CreatedAt = feedPost.Post.Record.CreatedAt ?? DateTime.MinValue,
-            Text = feedPost.Post.Record.Text ?? string.Empty,
-            ReplyParentUri = feedPost.Reply?.Parent?.Uri?.ToString(),
-            ReplyRootUri = feedPost.Reply?.Root?.Uri?.ToString(),
-            EmbedType = feedPost.Post.Embed?.Type,
+            EventTime = postView.IndexedAt,
+            EventTimeUs = postView.IndexedAt.ToMicroseconds(),
+            CreatedAt = postView.Record.CreatedAt ?? DateTime.MinValue,
+            Text = postView.Record.Text ?? string.Empty,
+            ReplyParentUri = null,
+            ReplyRootUri = null,
+            EmbedType = postView.Embed?.Type,
             ImageCount = imageCount,
             EmbedRecordUri = embedRecordUri,
         };
+    }
+
+    public static Post ToDbPost(this FishyFlip.Models.FeedViewPost feedPost)
+    {
+        var post = ToDbPost(feedPost.Post);
+        post.ReplyParentUri = feedPost.Reply?.Parent?.Uri?.ToString();
+        post.ReplyRootUri = feedPost.Reply?.Root?.Uri?.ToString();
+
+        return post;
     }
 }

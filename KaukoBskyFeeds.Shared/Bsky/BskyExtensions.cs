@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Shared.Bsky;
 
-public delegate Task<(T[]?, string?)> BskyPageableList<T>(
+public delegate Task<(IEnumerable<T>?, string?)> BskyPageableList<T>(
     string? cursor,
     CancellationToken cancellationToken = default
 );

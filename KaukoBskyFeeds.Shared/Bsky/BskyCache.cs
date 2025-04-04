@@ -44,6 +44,11 @@ public interface IBskyCache
         IEnumerable<ATDid> users,
         CancellationToken cancellationToken = default
     );
+    Task<IEnumerable<ATUri>> GetLikes(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetrics bskyMetrics)
@@ -160,7 +165,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                                     )
                                     .Record(bskyMetrics, "app.bsky.graph.getFollows");
                                 var d = r.HandleResult();
-                                return (d?.Follows, d?.Cursor);
+                                return (d?.Follows?.AsEnumerable(), d?.Cursor);
                             },
                             cancellationToken
                         )
@@ -198,7 +203,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                                     )
                                     .Record(bskyMetrics, "app.bsky.graph.getFollowers");
                                 var d = r.HandleResult();
-                                return (d?.Followers, d?.Cursor);
+                                return (d?.Followers?.AsEnumerable(), d?.Cursor);
                             },
                             cancellationToken
                         )
@@ -231,7 +236,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                                 .Graph.GetListAsync(listUri, cursor: cursor, cancellationToken: ct)
                                 .Record(bskyMetrics, "app.bsky.graph.getList");
                             var d = r.HandleResult();
-                            return (d?.Items, d?.Cursor);
+                            return (d?.Items.AsEnumerable(), d?.Cursor);
                         },
                         cancellationToken
                     );
@@ -318,5 +323,35 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         }
 
         return allProfiles.ToDictionary(k => k.Value.Did, v => v.Value.Profile);
+    }
+
+    // This only gets recent likes
+    public async Task<IEnumerable<ATUri>> GetLikes(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (proto?.Session == null)
+        {
+            throw new NotLoggedInException();
+        }
+
+        return await cache.GetOrCreateAsync(
+                $"user_{user}_likes",
+                async (_) =>
+                {
+                    logger.LogDebug("Fetching user {user} likes", user);
+                    var r = await proto
+                        .Repo.ListLikesAsync(user, cancellationToken: cancellationToken)
+                        .Record(bskyMetrics, "com.atproto.repo.listRecords");
+                    var d = r.HandleResult();
+                    return d
+                        ?.Records.Select(s => s.Value as Like)
+                        .Select(s => s?.Subject?.Uri)
+                        .WhereNotNull();
+                },
+                DEFAULT_OPTS
+            ) ?? [];
     }
 }
