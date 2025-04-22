@@ -341,7 +341,7 @@ public class JetstreamWorker(
         }
 
         // Clean up every 10 minutes
-        if (DateTime.Now - TimeSpan.FromMinutes(10) > _lastCleanup)
+        if (!_ingestConfig.DisableCleanup && DateTime.Now - TimeSpan.FromMinutes(10) > _lastCleanup)
         {
             logger.LogInformation("Performing db cleanup");
             var threeDaysAgo = DateTime.UtcNow - TimeSpan.FromDays(3);

@@ -6,6 +6,7 @@ public record IngestConfig(
     bool Verbose = false,
     bool ConsumeHistoricFeed = false,
     string? SingleCollection = null,
+    bool DisableCleanup = false,
     Dictionary<string, IngestFilterConfig>? Filter = null
 );
 

@@ -16,6 +16,10 @@
                     "description": "Single Jetstream collections to ingest. Use to override default.",
                     "type": "string"
                 },
+                "DisableCleanup": {
+                    "description": "Disable the cleanup inverval. Mostly for single-collection mode so they don't race each other.",
+                    "type": "boolean"
+                },
                 "Filter": {
                     "description": "Filter certain collections by DIDs",
                     "type": "object",
