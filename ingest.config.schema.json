@@ -4,6 +4,14 @@
         "IngestConfig": {
             "type": "object",
             "properties": {
+                "SaveMaxSec": {
+                    "description": "Maximum duration between saves, in seconds.",
+                    "type": "number"
+                },
+                "SaveMaxSize": {
+                    "description": "Maximum rows to save in one operation.",
+                    "type": "number"
+                },
                 "Verbose": {
                     "description": "Enable verbose logging",
                     "type": "boolean"
@@ -11,6 +19,10 @@
                 "ConsumeHistoricFeed": {
                     "description": "Consume historic feed, otherwise consume from tip of firehose",
                     "type": "boolean"
+                },
+                "FeedHistoryDays": {
+                    "description": "Number of days to keep.",
+                    "type": "number"
                 },
                 "SingleCollection": {
                     "description": "Single Jetstream collections to ingest. Use to override default.",

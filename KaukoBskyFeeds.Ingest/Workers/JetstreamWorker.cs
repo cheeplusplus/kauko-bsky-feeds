@@ -343,8 +343,11 @@ public class JetstreamWorker(
         // Clean up every 10 minutes
         if (!_ingestConfig.DisableCleanup && DateTime.Now - TimeSpan.FromMinutes(10) > _lastCleanup)
         {
-            logger.LogInformation("Performing db cleanup");
-            var threeDaysAgo = DateTime.UtcNow - TimeSpan.FromDays(3);
+            var threeDaysAgo = DateTime.UtcNow - TimeSpan.FromDays(_ingestConfig.FeedHistoryDays);
+            logger.LogInformation(
+                "Performing db cleanup of anything older than {days} days",
+                _ingestConfig.FeedHistoryDays
+            );
 
             using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
