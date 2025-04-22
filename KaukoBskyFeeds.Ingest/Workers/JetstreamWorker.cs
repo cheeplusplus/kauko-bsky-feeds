@@ -174,12 +174,50 @@ public class JetstreamWorker(
                         )
                     )
                     {
+                        if (targetFilter.UserFollowsAndLists != null)
+                        {
+                            await EnsureLogin();
+
+                            foreach (var userDidStr in targetFilter.UserFollowsAndLists)
+                            {
+                                var userDid = FishyFlip.Models.ATDid.Create(userDidStr);
+                                if (userDid == null)
+                                {
+                                    continue;
+                                }
+
+                                // Get everyone this user is following
+                                var userFollowingDids = await bskyCache.GetFollowing(
+                                    proto,
+                                    userDid,
+                                    cancellationToken
+                                );
+                                wantedDids.AddRange(userFollowingDids.Select(s => s.ToString()));
+
+                                // Get all of this user's lists
+                                var userLists = await bskyCache.GetLists(
+                                    proto,
+                                    userDid,
+                                    cancellationToken
+                                );
+                                foreach (var listDid in userLists)
+                                {
+                                    // Add list members
+                                    var userListDids = await bskyCache.GetListMembers(
+                                        proto,
+                                        listDid,
+                                        cancellationToken
+                                    );
+                                    wantedDids.AddRange(userListDids.Select(s => s.ToString()));
+                                }
+                            }
+                        }
                         if (targetFilter.ListUris != null)
                         {
+                            await EnsureLogin();
+
                             foreach (var listUri in targetFilter.ListUris)
                             {
-                                await EnsureLogin();
-
                                 var listDids = await bskyCache.GetListMembers(
                                     proto,
                                     FishyFlip.Models.ATUri.Create(listUri),

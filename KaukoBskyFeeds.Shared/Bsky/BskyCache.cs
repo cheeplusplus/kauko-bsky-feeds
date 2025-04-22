@@ -49,6 +49,11 @@ public interface IBskyCache
         ATDid user,
         CancellationToken cancellationToken = default
     );
+    Task<IEnumerable<ATUri>> GetLists(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetrics bskyMetrics)
@@ -350,6 +355,32 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                         ?.Records.Select(s => s.Value as Like)
                         .Select(s => s?.Subject?.Uri)
                         .WhereNotNull();
+                },
+                DEFAULT_OPTS
+            ) ?? [];
+    }
+
+    public async Task<IEnumerable<ATUri>> GetLists(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (proto?.Session == null)
+        {
+            throw new NotLoggedInException();
+        }
+
+        return await cache.GetOrCreateAsync(
+                $"user_{user}_lists",
+                async (_) =>
+                {
+                    logger.LogDebug("Fetching user {user} lists", user);
+                    var r = await proto
+                        .Graph.GetListsAsync(user, cancellationToken: cancellationToken)
+                        .Record(bskyMetrics, "app.bsky.graph.getLists");
+                    var d = r.HandleResult();
+                    return d?.Lists.Select(s => s.Uri);
                 },
                 DEFAULT_OPTS
             ) ?? [];

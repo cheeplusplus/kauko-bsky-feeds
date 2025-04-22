@@ -9,4 +9,8 @@ public record IngestConfig(
     Dictionary<string, IngestFilterConfig>? Filter = null
 );
 
-public record IngestFilterConfig(List<string>? Dids = null, List<string>? ListUris = null);
+public record IngestFilterConfig(
+    List<string>? UserFollowsAndLists = null,
+    List<string>? Dids = null,
+    List<string>? ListUris = null
+);

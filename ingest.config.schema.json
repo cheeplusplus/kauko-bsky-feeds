@@ -22,16 +22,22 @@
                     "additionalProperties": {
                         "type": "object",
                         "properties": {
+                            "UserFollowsAndLists": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/didDocument"
+                                }
+                            },
                             "ListUris": {
                                 "type": "array",
                                 "items": {
-                                    "type": "string"
+                                    "$ref": "#/definitions/atUriForList"
                                 }
                             },
                             "Dids": {
                                 "type": "array",
                                 "items": {
-                                    "type": "string"
+                                    "$ref": "#/definitions/didDocument"
                                 }
                             }
                         }
@@ -42,6 +48,23 @@
                     "format": "uri"
                 }
             }
+        }
+    },
+    "definitions": {
+        "didDocument": {
+            "$comment": "DID document (did:plc:XYZ)",
+            "type": "string",
+            "pattern": "^did:plc:\\w+$"
+        },
+        "atUriForDid": {
+            "$comment": "AT URI for DID document (at://did:plc:XYZ)",
+            "type": "string",
+            "pattern": "^at:\\/\\/did:plc:\\w+$"
+        },
+        "atUriForList": {
+            "$comment": "AT URI for list",
+            "type": "string",
+            "pattern": "^at:\\/\\/did:plc:\\w+\/app\\.bsky\\.graph\\.list\/\\w+$"
         }
     }
 }
