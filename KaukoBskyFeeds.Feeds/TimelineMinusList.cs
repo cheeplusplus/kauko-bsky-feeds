@@ -95,7 +95,7 @@ public class TimelineMinusList(
             {
                 judgement = JudgePost(
                     s,
-                    requestor,
+                    requestor ?? proto.Session.Did,
                     feedConfig,
                     followingList,
                     mutualsDids,
@@ -119,7 +119,8 @@ public class TimelineMinusList(
         {
             // Find the most recent set of reposts
             var reposts = await db
-                .PostReposts.Where(w => feedConfig.AlwaysShowUserReposts.Contains(w.RepostDid))
+                .PostReposts.LatestFromCursor(cursor)
+                .Where(w => feedConfig.AlwaysShowUserReposts.Contains(w.RepostDid))
                 .OrderByDescending(o => o.EventTime)
                 .Take(limit ?? 50)
                 .ToListAsync(cancellationToken);

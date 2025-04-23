@@ -17,7 +17,8 @@ public static class PostExtensions
     /// <param name="limit">Maximum posts to pull.</param>
     /// <param name="cursor">Cursor to resume from.</param>
     /// <returns>Queryable</returns>
-    public static IQueryable<Post> LatestFromCursor(this DbSet<Post> postTable, string? cursor)
+    public static IQueryable<T> LatestFromCursor<T>(this IQueryable<T> postTable, string? cursor)
+        where T : IPostRecord
     {
         DateTime? cursorPosition = null;
 
@@ -30,7 +31,7 @@ public static class PostExtensions
             cursorPosition = cursorAsDate;
         }
 
-        IQueryable<Post> q = postTable.OrderByDescending(o => o.EventTime);
+        IQueryable<T> q = postTable.OrderByDescending(o => o.EventTime);
         if (cursorPosition != null)
         {
             q = q.Where(w => w.EventTime < cursorPosition);
