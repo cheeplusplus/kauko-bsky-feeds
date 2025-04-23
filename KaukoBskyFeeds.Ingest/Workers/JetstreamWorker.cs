@@ -460,7 +460,13 @@ public class JetstreamWorker(
         {
             var wantedDids = await FetchWantedDids(message.Commit.Collection, cancellationToken);
             var subjectDid = message.GetSubjectDid();
-            if (wantedDids != null && subjectDid != null && !wantedDids.Contains(subjectDid))
+            if (
+                wantedDids != null
+                && !(
+                    wantedDids.Contains(message.Did)
+                    || (subjectDid != null && wantedDids.Contains(subjectDid))
+                )
+            )
             {
                 return;
             }
@@ -513,7 +519,13 @@ public class JetstreamWorker(
         {
             var wantedDids = await FetchWantedDids(message.Commit.Collection, cancellationToken);
             var subjectDid = message.GetSubjectDid();
-            if (wantedDids != null && subjectDid != null && !wantedDids.Contains(subjectDid))
+            if (
+                wantedDids != null
+                && !(
+                    wantedDids.Contains(message.Did)
+                    || (subjectDid != null && wantedDids.Contains(subjectDid))
+                )
+            )
             {
                 return;
             }
