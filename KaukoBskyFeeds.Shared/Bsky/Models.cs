@@ -4,7 +4,11 @@ using FishyFlip.Models;
 namespace KaukoBskyFeeds.Shared.Bsky;
 
 // Reason should be an ATUri but FishyFlip serializes it incorrectly
-public record CustomSkeletonReasonRepost(string Reason);
+public record CustomSkeletonReasonRepost(string Reason)
+{
+    [JsonPropertyName("$type")]
+    public string Type => "app.bsky.feed.defs#skeletonReasonRepost";
+}
 
 public record CustomSkeletonFeedPost(
     string Post,
