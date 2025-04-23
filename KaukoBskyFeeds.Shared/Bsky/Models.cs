@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using FishyFlip.Models;
 
 namespace KaukoBskyFeeds.Shared.Bsky.Models;
+namespace KaukoBskyFeeds.Shared.Bsky;
 
 public record CustomSkeletonFeedPost(
     string Post,

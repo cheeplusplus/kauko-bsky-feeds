@@ -1,6 +1,6 @@
 using FishyFlip.Models;
 using KaukoBskyFeeds.Shared;
-using KaukoBskyFeeds.Shared.Bsky.Models;
+using KaukoBskyFeeds.Shared.Bsky;
 
 namespace KaukoBskyFeeds.Feeds.Registry;
 

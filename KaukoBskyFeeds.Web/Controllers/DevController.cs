@@ -5,7 +5,7 @@ using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
-using KaukoBskyFeeds.Shared.Bsky.Models;
+using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
