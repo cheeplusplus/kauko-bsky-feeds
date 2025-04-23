@@ -1,4 +1,6 @@
 {
+    "$schema": "https://json-schema.org/draft-07/schema",
+    "$id": "https://github.com/cheeplusplus/kauko-bsky-feeds/bsky.config.schema.json",
     "type": "object",
     "properties": {
         "BskyConfig": {
@@ -226,11 +228,17 @@
                             "description": "Include posts from list from mutuals?",
                             "type": "boolean",
                             "default": false
+                        },
+                        "AlwaysShowUserReposts": {
+                            "description": "Always show reposts from these specific users",
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/didDocument"
+                            }
                         }
                     },
                     "required": [
-                        "ListUri",
-                        "AlwaysShowListUser"
+                        "ListUri"
                     ]
                 }
             }

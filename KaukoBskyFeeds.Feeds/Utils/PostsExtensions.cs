@@ -96,6 +96,11 @@ public static class PostExtensions
         return ATUri.Create(ToUri(post));
     }
 
+    public static string ToParentPostUri(this PostRepost repost)
+    {
+        return $"at://{repost.ParentRef.Did}/{BskyConstants.COLLECTION_TYPE_POST}/{repost.ParentRef.Rkey}";
+    }
+
     public static ATDid GetAuthorDid(this IPostRecord post)
     {
         return ATDid.Create(post.Ref.Did) ?? throw new Exception("Failed to convert DID from Post");

@@ -43,12 +43,6 @@ public class TimelineMinusList(
         {
             throw new NotLoggedInException();
         }
-        if (requestor == null)
-        {
-            // We need a requestor in order to reconstruct their feed
-            // Defaulting to the session user is incorrect
-            throw new FeedProhibitedException();
-        }
 
         var followingList = await bsCache.GetFollowing(proto, proto.Session.Did, cancellationToken);
         var followingListStr = followingList.Select(s => s.Handler);
@@ -114,18 +108,40 @@ public class TimelineMinusList(
                 judgement = new PostJudgement(PostType.ErrorState, false);
             }
 
-            return new
-            {
-                Judgement = judgement,
-                PostUri = s.ToUri(),
-                Cursor = s.EventTime,
-            };
+            return new InFeedJudgedPost(judgement, s.ToUri(), s.EventTime);
         });
 
+        // We're doing this after judgement because at the moment, we're not reliably able to combine posts and reposts
+        // If we were sure all PostReposts had a Post, we could write a view to fetch them all at once and give a Reason to JudgePost again
+        // But since that's not super performant atm we'll just do it manually at this step
+        List<InFeedJudgedPost> judgedReposts = [];
+        if (!feedConfig.FetchTimeline && feedConfig.AlwaysShowUserReposts != null)
+        {
+            // Find the most recent set of reposts
+            var reposts = await db
+                .PostReposts.Where(w => feedConfig.AlwaysShowUserReposts.Contains(w.RepostDid))
+                .OrderByDescending(o => o.EventTime)
+                .Take(limit ?? 50)
+                .ToListAsync(cancellationToken);
+            judgedReposts = reposts
+                .Select(s => new InFeedJudgedPost(
+                    new PostJudgement(
+                        PostType.Repost,
+                        true,
+                        RepostReason: new CustomSkeletonReasonRepost(s.ToUri())
+                    ),
+                    s.ToParentPostUri(),
+                    s.EventTime
+                ))
+                .ToList();
+        }
+
         var filteredFeed = judgedFeed
+            .Concat(judgedReposts)
             .Where(w => w.Judgement.ShouldShow)
             .OrderByDescending(o => o.Cursor)
-            .Take(limit ?? 50);
+            .Take(limit ?? 50)
+            .ToList();
         var feedOutput = filteredFeed
             .Select(s => new CustomSkeletonFeedPost(
                 s.PostUri,
@@ -171,6 +187,7 @@ public class TimelineMinusList(
         bool isFollowing(ATDid? did) => did != null && followingDids.Contains(did, _atDidComparer);
         bool isMutual(ATDid? did) => did != null && mutualsDids.Contains(did, _atDidComparer);
         bool isInList(ATDid? did) => did != null && listMemberDids.Contains(did, _atDidComparer);
+
         bool isMuted(ATDid? did) =>
             did != null && (feedConfig.MuteUsers?.Contains(did.Handler) ?? false);
 
@@ -289,8 +306,10 @@ public class TimelineMinusList(
     private record PostJudgement(
         PostType Type,
         bool ShouldShow,
-        SkeletonReasonRepost? RepostReason = null
+        CustomSkeletonReasonRepost? RepostReason = null
     );
+
+    private record InFeedJudgedPost(PostJudgement Judgement, string PostUri, DateTime Cursor);
 
     private enum PostType
     {

@@ -1,14 +1,24 @@
 using System.Text.Json.Serialization;
 using FishyFlip.Models;
 
-namespace KaukoBskyFeeds.Shared.Bsky.Models;
 namespace KaukoBskyFeeds.Shared.Bsky;
+
+// Reason should be an ATUri but FishyFlip serializes it incorrectly
+public record CustomSkeletonReasonRepost(string Reason)
+{
+    [JsonPropertyName("$type")]
+    public string Type => "app.bsky.feed.defs#skeletonReasonRepost";
+}
 
 public record CustomSkeletonFeedPost(
     string Post,
-    SkeletonReasonRepost? Reason = null,
+    CustomSkeletonReasonRepost? Reason = null,
     string? FeedContext = null
-);
+)
+{
+    [JsonPropertyName("$type")]
+    public string Type => "app.bsky.feed.defs#skeletonFeedPost";
+}
 
 public record CustomSkeletonFeed(IEnumerable<CustomSkeletonFeedPost> Feed, string? Cursor);
 

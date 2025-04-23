@@ -11,6 +11,7 @@ public record TimelineMinusListFeedConfig(
     bool RestrictToFeedOwner = false,
     bool FetchTimeline = false,
     List<string>? AlwaysShowListUser = null,
+    List<string>? AlwaysShowUserReposts = null,
     List<string>? MuteUsers = null,
     bool ShowSelfPosts = true,
     [property: JsonConverter(typeof(JsonStringEnumConverter<ShowRepliesSetting>))]
