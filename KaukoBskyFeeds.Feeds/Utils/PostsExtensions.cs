@@ -40,30 +40,6 @@ public static class PostExtensions
         return q;
     }
 
-    public static IQueryable<Post> ConcussiveFromCursor(
-        this DbSet<Post> postTable,
-        IEnumerable<string> dids,
-        int limit,
-        string? cursor
-    )
-    {
-        var root = postTable.LatestFromCursor(cursor);
-        IQueryable<Post>? result = null;
-        foreach (var did in dids)
-        {
-            var sq = root.Where(w => w.Did == did).OrderByDescending(o => o.EventTime).Take(limit);
-            if (result == null)
-            {
-                result = sq;
-            }
-            else
-            {
-                result = result.Concat(sq);
-            }
-        }
-        return Enumerable.Empty<Post>().AsQueryable();
-    }
-
     public static string GetCursor(this IPostRecord post)
     {
         return AsCursor(post.EventTime);
@@ -86,10 +62,14 @@ public static class PostExtensions
         };
     }
 
+    public static string ToUri(this PostRecordRef recordRef, string collectionType)
+    {
+        return $"at://{recordRef.Did}/{collectionType}/{recordRef.Rkey}";
+    }
+
     public static string ToUri(this IPostRecord post)
     {
-        // TODO: This isn't quite correct as it may not actually be a post
-        return $"at://{post.Ref.Did}/{post.ToCollectionType()}/{post.Ref.Rkey}";
+        return ToUri(post.Ref, post.ToCollectionType());
     }
 
     public static ATUri ToAtUri(this IPostRecord post)
@@ -97,7 +77,7 @@ public static class PostExtensions
         return ATUri.Create(ToUri(post));
     }
 
-    public static string ToParentPostUri(this PostRepost repost)
+    public static string ToParentPostUri(this IPostInteraction repost)
     {
         return $"at://{repost.ParentRef.Did}/{BskyConstants.COLLECTION_TYPE_POST}/{repost.ParentRef.Rkey}";
     }

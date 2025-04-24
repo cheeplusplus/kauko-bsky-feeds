@@ -109,6 +109,9 @@
                             },
                             {
                                 "$ref": "#/definitions/FeedProcessorLikesImagesOnly"
+                            },
+                            {
+                                "$ref": "#/definitions/FeedProcessorPopularAmong"
                             }
                         ]
                     },
@@ -310,6 +313,41 @@
                     "properties": {
                         "FetchTimeline": {
                             "description": "Fetch the timeline instead of using the cache",
+                            "type": "boolean"
+                        }
+                    }
+                }
+            }
+        },
+        "FeedProcessorPopularAmong": {
+            "type": "object",
+            "properties": {
+                "Type": {
+                    "type": "string",
+                    "const": "PopularAmong"
+                },
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "TargetGroup": {
+                            "description": "Group to target popularity against",
+                            "type": "string",
+                            "default": "following",
+                            "enum": ["followers", "following", "mutuals"]
+                        },
+                        "MinRelevance": {
+                            "description": "Number of unique users needed interacting to show a post",
+                            "type": "number",
+                            "default": 2,
+                            "minimum": 0
+                        },
+                        "ImagesOnly": {
+                            "description": "Filter to images only",
+                            "type": "boolean"
+                        },
+                        "ImagesChecksServer": {
+                            "$comment": "This is needed if the database is filtering posts",
+                            "description": "Perform the images only check against the server instead of the db",
                             "type": "boolean"
                         }
                     }

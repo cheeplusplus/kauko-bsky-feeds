@@ -7,7 +7,7 @@ public interface IPostRecord
     long EventTimeUs { get; }
 }
 
-interface IPostInteraction : IPostRecord
+public interface IPostInteraction : IPostRecord
 {
     string ParentDid { get; }
     string ParentRkey { get; }
