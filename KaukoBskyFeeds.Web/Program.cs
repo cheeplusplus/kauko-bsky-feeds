@@ -29,7 +29,7 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
         }
     );
 });
-builder.Services.AddBskyServices();
+builder.Services.AddBskyServices(builder.Configuration.GetConnectionString("redis"));
 builder.Services.AddSingleton<FeedRegistry>();
 
 builder.Services.AddHealthChecks();

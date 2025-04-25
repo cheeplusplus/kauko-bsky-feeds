@@ -8,7 +8,7 @@ using KaukoBskyFeeds.Feeds.Utils;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace KaukoBskyFeeds.Feeds;
 
@@ -17,7 +17,7 @@ public class BestArt(
     ATProtocol proto,
     BestArtFeedConfig feedConfig,
     FeedDbContext db,
-    IMemoryCache mCache,
+    HybridCache mCache,
     IBskyCache bsCache,
     FeedInstanceMetadata feedMeta
 ) : IFeed
@@ -65,7 +65,9 @@ public class BestArt(
                         .Take(FEED_LIMIT)
                         .ToListAsync(cancellationToken);
                 },
-                BskyCache.DEFAULT_OPTS
+                BskyCache.DEFAULT_OPTS,
+                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                cancellationToken: cancellationToken
             ) ?? [];
 
         if (finalPostList.Count < 1)

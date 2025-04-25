@@ -9,7 +9,7 @@ using KaukoBskyFeeds.Feeds.Utils;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace KaukoBskyFeeds.Feeds;
 
@@ -18,7 +18,7 @@ public class PopularAmong(
     ATProtocol proto,
     PopularAmongFeedConfig feedConfig,
     FeedDbContext db,
-    IMemoryCache mCache,
+    HybridCache mCache,
     IBskyCache bsCache,
     FeedInstanceMetadata feedMeta
 ) : IFeed
@@ -125,7 +125,9 @@ public class PopularAmong(
                             PostUri = s.Ref.ToUri(BskyConstants.COLLECTION_TYPE_POST),
                         });
                 },
-                BskyCache.DEFAULT_OPTS
+                BskyCache.DEFAULT_OPTS,
+                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                cancellationToken: cancellationToken
             ) ?? [];
 
         if (feedConfig is { ImagesOnly: true, ImagesChecksServer: true })

@@ -2,7 +2,7 @@ using FishyFlip;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Shared.Metrics;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Shared.Bsky;
@@ -14,41 +14,49 @@ public interface IBskyCache
         ATUri postUri,
         CancellationToken cancellationToken = default
     );
+
     Task<IEnumerable<PostView?>> GetPosts(
         ATProtocol proto,
         IEnumerable<ATUri> postUris,
         CancellationToken cancellationToken = default
     );
+
     Task<IEnumerable<ATDid>> GetFollowing(
         ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     );
+
     Task<IEnumerable<ATDid>> GetFollowers(
         ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     );
+
     Task<IEnumerable<ATDid>> GetListMembers(
         ATProtocol proto,
         ATUri listUri,
         CancellationToken cancellationToken = default
     );
+
     Task<FeedProfile?> GetProfile(
         ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     );
+
     Task<Dictionary<ATDid, FeedProfile?>> GetProfiles(
         ATProtocol proto,
         IEnumerable<ATDid> users,
         CancellationToken cancellationToken = default
     );
+
     Task<IEnumerable<ATUri>> GetLikes(
         ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     );
+
     Task<IEnumerable<ATUri>> GetLists(
         ATProtocol proto,
         ATDid user,
@@ -56,17 +64,19 @@ public interface IBskyCache
     );
 }
 
-public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetrics bskyMetrics)
+public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics bskyMetrics)
     : IBskyCache
 {
     public static readonly TimeSpan NORMAL_CACHE_DURATION = TimeSpan.FromMinutes(10);
-    public static readonly MemoryCacheEntryOptions DEFAULT_OPTS = new()
+
+    public static readonly HybridCacheEntryOptions DEFAULT_OPTS = new()
     {
-        AbsoluteExpirationRelativeToNow = NORMAL_CACHE_DURATION,
+        Expiration = NORMAL_CACHE_DURATION,
     };
-    public static readonly MemoryCacheEntryOptions QUICK_OPTS = new()
+
+    public static readonly HybridCacheEntryOptions QUICK_OPTS = new()
     {
-        AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(10),
+        Expiration = TimeSpan.FromSeconds(10),
     };
 
     public async Task<PostView?> GetPost(
@@ -75,25 +85,29 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
 
         return await cache.GetOrCreateAsync(
             $"post_{postUri}",
-            async (_) =>
+            async (ct) =>
             {
                 logger.LogDebug("Fetching post {postUri} following", postUri);
                 var r = await proto
-                    .Feed.GetPostsAsync([postUri], cancellationToken)
+                    .Feed.GetPostsAsync([postUri], ct)
                     .Record(bskyMetrics, "app.bsky.feed.getPosts1");
                 var d = r.HandleResult();
                 return d.Posts.FirstOrDefault();
             },
-            DEFAULT_OPTS
+            DEFAULT_OPTS,
+            tags: ["post", $"{postUri}", $"user/{postUri.Did}"],
+            cancellationToken: cancellationToken
         );
     }
+
+    record GetPostsDict(ATUri ATUri, PostView? Post);
 
     public async Task<IEnumerable<PostView?>> GetPosts(
         ATProtocol proto,
@@ -101,16 +115,20 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
 
         // fetch all available cached entries first
-        var allPosts = postUris.ToDictionary(
-            k => k.ToString(),
-            v => new { ATUri = v, Post = cache.Get<PostView>($"post_{v}") }
-        );
+        var allPosts = new Dictionary<ATUri, GetPostsDict>();
+        foreach (var uri in postUris)
+        {
+            allPosts[uri] = new GetPostsDict(
+                uri,
+                await cache.GetAsync<PostView>($"post_{uri}", cancellationToken)
+            );
+        }
 
         // fetch remaining posts and cache them
         var postsToFetch = allPosts
@@ -129,17 +147,19 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
 
                 foreach (var post in freshPosts?.Posts ?? [])
                 {
-                    allPosts[post.Uri.ToString()] = new
-                    {
-                        ATUri = post.Uri,
-                        Post = (PostView?)post,
-                    };
-                    cache.Set($"post_{post.Uri}", post, DEFAULT_OPTS);
+                    allPosts[post.Uri] = new GetPostsDict(post.Uri, post);
+                    await cache.SetAsync(
+                        $"post_{post.Uri}",
+                        post,
+                        DEFAULT_OPTS,
+                        tags: ["post", $"{post.Uri}"],
+                        cancellationToken: cancellationToken
+                    );
                 }
             }
         }
 
-        return postUris.Select(s => allPosts[s.ToString()].Post);
+        return postUris.Select(s => allPosts[s].Post);
     }
 
     public async Task<IEnumerable<ATDid>> GetFollowing(
@@ -148,35 +168,37 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
 
         return await cache.GetOrCreateAsync(
                 $"user_{user}_following",
-                async (_) =>
+                async (ct) =>
                 {
                     logger.LogDebug("Fetching user {listUri} following", user);
                     return (
                         await BskyExtensions.GetAllResults(
-                            async (cursor, ct) =>
+                            async (cursor, ict) =>
                             {
                                 var r = await proto
                                     .Graph.GetFollowsAsync(
                                         proto.Session.Handle,
                                         cursor: cursor,
-                                        cancellationToken: ct
+                                        cancellationToken: ict
                                     )
                                     .Record(bskyMetrics, "app.bsky.graph.getFollows");
                                 var d = r.HandleResult();
                                 return (d?.Follows?.AsEnumerable(), d?.Cursor);
                             },
-                            cancellationToken
+                            ct
                         )
                     ).Select(s => s.Did).ToList();
                 },
-                DEFAULT_OPTS
+                DEFAULT_OPTS,
+                tags: ["user", $"user/{user}"],
+                cancellationToken: cancellationToken
             ) ?? [];
     }
 
@@ -186,7 +208,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
@@ -214,7 +236,9 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                         )
                     ).Select(s => s.Did).ToList();
                 },
-                DEFAULT_OPTS
+                DEFAULT_OPTS,
+                tags: ["user", $"user/{user}", $"user/{user}/followers"],
+                cancellationToken: cancellationToken
             ) ?? [];
     }
 
@@ -224,7 +248,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
@@ -254,7 +278,9 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
 
                     return listMemberDids;
                 },
-                DEFAULT_OPTS
+                DEFAULT_OPTS,
+                tags: ["list", $"{listUri}", $"user/{listUri.Did}"],
+                cancellationToken: cancellationToken
             ) ?? [];
     }
 
@@ -264,7 +290,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
@@ -279,9 +305,13 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                     .Record(bskyMetrics, "app.bsky.actor.getProfile");
                 return profileRes.HandleResult();
             },
-            DEFAULT_OPTS
+            DEFAULT_OPTS,
+            tags: ["user", $"user/{user}", $"user/{user}/profile"],
+            cancellationToken: cancellationToken
         );
     }
+
+    private record GetProfilesDict(ATDid Did, FeedProfile? Profile);
 
     public async Task<Dictionary<ATDid, FeedProfile?>> GetProfiles(
         ATProtocol proto,
@@ -289,16 +319,20 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
 
         // fetch all available cached entries first
-        var allProfiles = users.ToDictionary(
-            k => k.ToString(),
-            v => new { Did = v, Profile = cache.Get<FeedProfile>($"user_{v}_profile") }
-        );
+        var allProfiles = new Dictionary<ATDid, GetProfilesDict>();
+        foreach (var user in users)
+        {
+            allProfiles[user] = new GetProfilesDict(
+                user,
+                await cache.GetAsync<FeedProfile>($"user_{user}_profile", cancellationToken)
+            );
+        }
 
         // fetch remaining profiles and cache them
         var profilesToFetch = allProfiles
@@ -317,12 +351,14 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
 
                 foreach (var profile in freshProfiles?.Profiles ?? [])
                 {
-                    allProfiles[profile.Did.ToString()] = new
-                    {
-                        Did = profile.Did,
-                        Profile = (FeedProfile?)profile,
-                    };
-                    cache.Set($"user_{profile.Did}_profile", profile, DEFAULT_OPTS);
+                    allProfiles[profile.Did] = new GetProfilesDict(profile.Did, profile);
+                    await cache.SetAsync(
+                        $"user_{profile.Did}_profile",
+                        profile,
+                        DEFAULT_OPTS,
+                        tags: ["user", $"user/{profile.Did}", $"user/{profile.Did}/profile"],
+                        cancellationToken: cancellationToken
+                    );
                 }
             }
         }
@@ -337,7 +373,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
@@ -356,7 +392,9 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                         .Select(s => s?.Subject?.Uri)
                         .WhereNotNull();
                 },
-                DEFAULT_OPTS
+                DEFAULT_OPTS,
+                tags: ["user", $"user/{user}", $"user/{user}/likes"],
+                cancellationToken: cancellationToken
             ) ?? [];
     }
 
@@ -366,7 +404,7 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
         CancellationToken cancellationToken = default
     )
     {
-        if (proto?.Session == null)
+        if (proto.Session == null)
         {
             throw new NotLoggedInException();
         }
@@ -382,7 +420,31 @@ public class BskyCache(ILogger<BskyCache> logger, IMemoryCache cache, BskyMetric
                     var d = r.HandleResult();
                     return d?.Lists.Select(s => s.Uri);
                 },
-                DEFAULT_OPTS
+                DEFAULT_OPTS,
+                tags: ["user", $"user/{user}", $"user/{user}/lists"],
+                cancellationToken: cancellationToken
             ) ?? [];
+    }
+}
+
+public static class CacheExtensions
+{
+    public static async ValueTask<T?> GetAsync<T>(
+        this HybridCache cache,
+        string key,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await cache.GetOrCreateAsync(
+            key,
+            (_) => ValueTask.FromResult(default(T)),
+            new HybridCacheEntryOptions()
+            {
+                Flags =
+                    HybridCacheEntryFlags.DisableDistributedCacheWrite
+                    & HybridCacheEntryFlags.DisableLocalCacheWrite,
+            },
+            cancellationToken: cancellationToken
+        );
     }
 }

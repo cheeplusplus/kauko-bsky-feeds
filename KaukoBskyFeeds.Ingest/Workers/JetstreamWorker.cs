@@ -8,7 +8,7 @@ using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -23,7 +23,7 @@ public class JetstreamWorker(
     IngestMetrics metrics,
     FishyFlip.ATProtocol proto,
     IBskyCache bskyCache,
-    IMemoryCache memCache,
+    HybridCache memCache,
     IJetstreamConsumer consumer
 ) : IHostedService
 {
@@ -246,7 +246,9 @@ public class JetstreamWorker(
 
                 return wantedDids;
             },
-            BskyCache.DEFAULT_OPTS
+            BskyCache.DEFAULT_OPTS,
+            tags: ["ingest", "ingest/wantedDids"],
+            cancellationToken: cancellationToken
         );
     }
 

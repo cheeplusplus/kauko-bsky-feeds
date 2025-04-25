@@ -7,7 +7,7 @@ using KaukoBskyFeeds.Feeds.Utils;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace KaukoBskyFeeds.Feeds;
 
@@ -16,7 +16,7 @@ public class LikesImagesOnly(
     ATProtocol proto,
     LikesImagesOnlyFeedConfig feedConfig,
     FeedDbContext db,
-    IMemoryCache mCache,
+    HybridCache mCache,
     IBskyCache bsCache,
     FeedInstanceMetadata feedMeta
 ) : IFeed
@@ -70,7 +70,9 @@ public class LikesImagesOnly(
                             .ToListAsync(cancellationToken);
                     },
                     // match cache time on GetLikes
-                    BskyCache.DEFAULT_OPTS
+                    BskyCache.DEFAULT_OPTS,
+                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                    cancellationToken: cancellationToken
                 ) ?? [];
 
             // Put them back in the original order

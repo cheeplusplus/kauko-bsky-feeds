@@ -42,7 +42,7 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
     });
 });
 
-builder.Services.AddBskyServices();
+builder.Services.AddBskyServices(builder.Configuration.GetConnectionString("redis"));
 
 // builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();

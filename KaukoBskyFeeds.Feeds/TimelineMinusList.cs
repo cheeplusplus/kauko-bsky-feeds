@@ -10,7 +10,7 @@ using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
 using Post = KaukoBskyFeeds.Db.Models.Post;
 
@@ -23,7 +23,7 @@ public class TimelineMinusList(
     TimelineMinusListFeedConfig feedConfig,
     FeedDbContext db,
     BskyMetrics bskyMetrics,
-    IMemoryCache mCache,
+    HybridCache mCache,
     IBskyCache bsCache,
     FeedInstanceMetadata feedMeta
 ) : IFeed
@@ -78,7 +78,8 @@ public class TimelineMinusList(
                             .Take(100)
                             .ToListAsync(cancellationToken);
                     },
-                    BskyCache.QUICK_OPTS
+                    BskyCache.QUICK_OPTS,
+                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"]
                 ) ?? [];
         }
 

@@ -10,7 +10,7 @@ using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace KaukoBskyFeeds.Feeds;
 
@@ -20,7 +20,7 @@ public class ListImagesOnly(
     ListImagesOnlyFeedConfig feedConfig,
     FeedDbContext db,
     BskyMetrics bskyMetrics,
-    IMemoryCache mCache,
+    HybridCache mCache,
     IBskyCache bsCache,
     FeedInstanceMetadata feedMeta
 ) : IFeed
@@ -73,7 +73,9 @@ public class ListImagesOnly(
                             .Take(50)
                             .ToListAsync(cancellationToken);
                     },
-                    BskyCache.QUICK_OPTS
+                    BskyCache.QUICK_OPTS,
+                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                    cancellationToken: cancellationToken
                 ) ?? [];
             if (limit.HasValue)
             {

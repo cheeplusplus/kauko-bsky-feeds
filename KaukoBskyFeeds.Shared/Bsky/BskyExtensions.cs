@@ -13,9 +13,20 @@ public delegate Task<(IEnumerable<T>?, string?)> BskyPageableList<T>(
 
 public static class BskyExtensions
 {
-    public static IServiceCollection AddBskyServices(this IServiceCollection collection)
+    public static IServiceCollection AddBskyServices(
+        this IServiceCollection collection,
+        string? redisConnectionString = null
+    )
     {
-        collection.AddMemoryCache();
+        if (redisConnectionString != null)
+        {
+            collection.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+            });
+        }
+
+        collection.AddHybridCache();
         collection.AddSingleton<IBskyCache, BskyCache>();
         collection.AddSingleton(f =>
         {
