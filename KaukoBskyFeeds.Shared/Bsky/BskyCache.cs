@@ -1,4 +1,6 @@
 using FishyFlip;
+using FishyFlip.Lexicon.App.Bsky.Actor;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Shared.Metrics;
@@ -39,13 +41,13 @@ public interface IBskyCache
         CancellationToken cancellationToken = default
     );
 
-    Task<FeedProfile?> GetProfile(
+    Task<ProfileViewDetailed?> GetProfile(
         ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     );
 
-    Task<Dictionary<ATDid, FeedProfile?>> GetProfiles(
+    Task<Dictionary<ATDid, ProfileViewDetailed?>> GetProfiles(
         ATProtocol proto,
         IEnumerable<ATDid> users,
         CancellationToken cancellationToken = default
@@ -67,14 +69,14 @@ public interface IBskyCache
 public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics bskyMetrics)
     : IBskyCache
 {
-    public static readonly TimeSpan NORMAL_CACHE_DURATION = TimeSpan.FromMinutes(10);
+    public static readonly TimeSpan NormalCacheDuration = TimeSpan.FromMinutes(10);
 
-    public static readonly HybridCacheEntryOptions DEFAULT_OPTS = new()
+    public static readonly HybridCacheEntryOptions DefaultOpts = new()
     {
-        Expiration = NORMAL_CACHE_DURATION,
+        Expiration = NormalCacheDuration,
     };
 
-    public static readonly HybridCacheEntryOptions QUICK_OPTS = new()
+    public static readonly HybridCacheEntryOptions QuickOpts = new()
     {
         Expiration = TimeSpan.FromSeconds(10),
     };
@@ -99,15 +101,15 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                     .Feed.GetPostsAsync([postUri], ct)
                     .Record(bskyMetrics, "app.bsky.feed.getPosts1");
                 var d = r.HandleResult();
-                return d.Posts.FirstOrDefault();
+                return d?.Posts.FirstOrDefault();
             },
-            DEFAULT_OPTS,
+            DefaultOpts,
             tags: ["post", $"{postUri}", $"user/{postUri.Did}"],
             cancellationToken: cancellationToken
         );
     }
 
-    record GetPostsDict(ATUri ATUri, PostView? Post);
+    private record GetPostsDict(ATUri AtUri, PostView? Post);
 
     public async Task<IEnumerable<PostView?>> GetPosts(
         ATProtocol proto,
@@ -133,7 +135,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
         // fetch remaining posts and cache them
         var postsToFetch = allPosts
             .Where(w => w.Value.Post == null)
-            .Select(s => s.Value.ATUri)
+            .Select(s => s.Value.AtUri)
             .ToList();
         if (postsToFetch.Count > 0)
         {
@@ -141,7 +143,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
             foreach (var postGroup in postChunks)
             {
                 var freshPostsRes = await proto
-                    .Feed.GetPostsAsync(postGroup.ToArray(), cancellationToken)
+                    .Feed.GetPostsAsync(postGroup.ToList(), cancellationToken)
                     .Record(bskyMetrics, "app.bsky.feed.getPosts");
                 var freshPosts = freshPostsRes.HandleResult();
 
@@ -151,7 +153,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                     await cache.SetAsync(
                         $"post_{post.Uri}",
                         post,
-                        DEFAULT_OPTS,
+                        DefaultOpts,
                         tags: ["post", $"{post.Uri}"],
                         cancellationToken: cancellationToken
                     );
@@ -178,25 +180,23 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                 async (ct) =>
                 {
                     logger.LogDebug("Fetching user {listUri} following", user);
-                    return (
-                        await BskyExtensions.GetAllResults(
-                            async (cursor, ict) =>
-                            {
-                                var r = await proto
-                                    .Graph.GetFollowsAsync(
-                                        proto.Session.Handle,
-                                        cursor: cursor,
-                                        cancellationToken: ict
-                                    )
-                                    .Record(bskyMetrics, "app.bsky.graph.getFollows");
-                                var d = r.HandleResult();
-                                return (d?.Follows?.AsEnumerable(), d?.Cursor);
-                            },
-                            ct
-                        )
-                    ).Select(s => s.Did).ToList();
+                    return await BskyExtensions.GetAllResults(
+                        async (cursor, ict) =>
+                        {
+                            var r = await proto
+                                .Graph.GetFollowsAsync(
+                                    proto.Session.Handle,
+                                    cursor: cursor,
+                                    cancellationToken: ict
+                                )
+                                .Record(bskyMetrics, "app.bsky.graph.getFollows");
+                            var d = r.HandleResult();
+                            return (d?.Follows.Select(s => s.Did), d?.Cursor);
+                        },
+                        ct
+                    );
                 },
-                DEFAULT_OPTS,
+                DefaultOpts,
                 tags: ["user", $"user/{user}"],
                 cancellationToken: cancellationToken
             ) ?? [];
@@ -215,28 +215,28 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
 
         return await cache.GetOrCreateAsync(
                 $"user_{user}_followers",
-                async (_) =>
+                async (ct) =>
                 {
                     logger.LogDebug("Fetching user {listUri} followers", user);
                     return (
                         await BskyExtensions.GetAllResults(
-                            async (cursor, ct) =>
+                            async (cursor, ict) =>
                             {
                                 var r = await proto
                                     .Graph.GetFollowersAsync(
                                         proto.Session.Handle,
                                         cursor: cursor,
-                                        cancellationToken: ct
+                                        cancellationToken: ict
                                     )
                                     .Record(bskyMetrics, "app.bsky.graph.getFollowers");
                                 var d = r.HandleResult();
-                                return (d?.Followers?.AsEnumerable(), d?.Cursor);
+                                return (d?.Followers.Select(s => s.Did), d?.Cursor);
                             },
-                            cancellationToken
+                            ct
                         )
-                    ).Select(s => s.Did).ToList();
+                    );
                 },
-                DEFAULT_OPTS,
+                DefaultOpts,
                 tags: ["user", $"user/{user}", $"user/{user}/followers"],
                 cancellationToken: cancellationToken
             ) ?? [];
@@ -255,36 +255,28 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
 
         return await cache.GetOrCreateAsync(
                 $"list_{listUri}_members",
-                async (_) =>
+                async (ct) =>
                 {
                     logger.LogDebug("Fetching list {listUri} members list", listUri);
-                    var listMembers = await BskyExtensions.GetAllResults(
-                        async (cursor, ct) =>
+                    return await BskyExtensions.GetAllResults(
+                        async (cursor, ict) =>
                         {
                             var r = await proto
-                                .Graph.GetListAsync(listUri, cursor: cursor, cancellationToken: ct)
+                                .Graph.GetListAsync(listUri, cursor: cursor, cancellationToken: ict)
                                 .Record(bskyMetrics, "app.bsky.graph.getList");
                             var d = r.HandleResult();
-                            return (d?.Items.AsEnumerable(), d?.Cursor);
+                            return (d?.Items.Select(s => s.Subject.Did), d?.Cursor);
                         },
-                        cancellationToken
+                        ct
                     );
-
-                    var listMemberDids = listMembers
-                        .Select(s => s.Subject.Did)
-                        .Where(w => w != null)
-                        .Cast<ATDid>()
-                        .ToList();
-
-                    return listMemberDids;
                 },
-                DEFAULT_OPTS,
+                DefaultOpts,
                 tags: ["list", $"{listUri}", $"user/{listUri.Did}"],
                 cancellationToken: cancellationToken
             ) ?? [];
     }
 
-    public async Task<FeedProfile?> GetProfile(
+    public async Task<ProfileViewDetailed?> GetProfile(
         ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
@@ -297,23 +289,23 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
 
         return await cache.GetOrCreateAsync(
             $"user_{user}_profile",
-            async (_) =>
+            async (ct) =>
             {
                 logger.LogDebug("Fetching user {user} profile", user);
                 var profileRes = await proto
-                    .Actor.GetProfileAsync(user, cancellationToken)
+                    .Actor.GetProfileAsync(user, ct)
                     .Record(bskyMetrics, "app.bsky.actor.getProfile");
                 return profileRes.HandleResult();
             },
-            DEFAULT_OPTS,
+            DefaultOpts,
             tags: ["user", $"user/{user}", $"user/{user}/profile"],
             cancellationToken: cancellationToken
         );
     }
 
-    private record GetProfilesDict(ATDid Did, FeedProfile? Profile);
+    private record GetProfilesDict(ATDid Did, ProfileViewDetailed? Profile);
 
-    public async Task<Dictionary<ATDid, FeedProfile?>> GetProfiles(
+    public async Task<Dictionary<ATDid, ProfileViewDetailed?>> GetProfiles(
         ATProtocol proto,
         IEnumerable<ATDid> users,
         CancellationToken cancellationToken = default
@@ -330,7 +322,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
         {
             allProfiles[user] = new GetProfilesDict(
                 user,
-                await cache.GetAsync<FeedProfile>($"user_{user}_profile", cancellationToken)
+                await cache.GetAsync<ProfileViewDetailed>($"user_{user}_profile", cancellationToken)
             );
         }
 
@@ -345,7 +337,10 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
             foreach (var profileGroup in profileChunks)
             {
                 var freshProfilesRes = await proto
-                    .Actor.GetProfilesAsync(profileGroup.ToArray(), cancellationToken)
+                    .Actor.GetProfilesAsync(
+                        profileGroup.Cast<ATIdentifier>().ToList(),
+                        cancellationToken
+                    )
                     .Record(bskyMetrics, "app.bsky.actor.getProfiles");
                 var freshProfiles = freshProfilesRes.HandleResult();
 
@@ -355,7 +350,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                     await cache.SetAsync(
                         $"user_{profile.Did}_profile",
                         profile,
-                        DEFAULT_OPTS,
+                        DefaultOpts,
                         tags: ["user", $"user/{profile.Did}", $"user/{profile.Did}/profile"],
                         cancellationToken: cancellationToken
                     );
@@ -380,11 +375,15 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
 
         return await cache.GetOrCreateAsync(
                 $"user_{user}_likes",
-                async (_) =>
+                async (ct) =>
                 {
                     logger.LogDebug("Fetching user {user} likes", user);
                     var r = await proto
-                        .Repo.ListLikesAsync(user, cancellationToken: cancellationToken)
+                        .Repo.ListRecordsAsync(
+                            user,
+                            BskyConstants.COLLECTION_TYPE_LIKE,
+                            cancellationToken: ct
+                        )
                         .Record(bskyMetrics, "com.atproto.repo.listRecords");
                     var d = r.HandleResult();
                     return d
@@ -392,7 +391,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                         .Select(s => s?.Subject?.Uri)
                         .WhereNotNull();
                 },
-                DEFAULT_OPTS,
+                DefaultOpts,
                 tags: ["user", $"user/{user}", $"user/{user}/likes"],
                 cancellationToken: cancellationToken
             ) ?? [];
@@ -411,16 +410,16 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
 
         return await cache.GetOrCreateAsync(
                 $"user_{user}_lists",
-                async (_) =>
+                async (ct) =>
                 {
                     logger.LogDebug("Fetching user {user} lists", user);
                     var r = await proto
-                        .Graph.GetListsAsync(user, cancellationToken: cancellationToken)
+                        .Graph.GetListsAsync(user, cancellationToken: ct)
                         .Record(bskyMetrics, "app.bsky.graph.getLists");
                     var d = r.HandleResult();
                     return d?.Lists.Select(s => s.Uri);
                 },
-                DEFAULT_OPTS,
+                DefaultOpts,
                 tags: ["user", $"user/{user}", $"user/{user}/lists"],
                 cancellationToken: cancellationToken
             ) ?? [];

@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using FishyFlip;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
@@ -48,11 +49,11 @@ public class ListImagesOnly(
         if (feedConfig.FetchTimeline)
         {
             var postTlRes = await proto
-                .Feed.GetListFeedAsync(listUri, limit ?? 50, cancellationToken)
+                .Feed.GetListFeedAsync(listUri, limit ?? 50, cancellationToken: cancellationToken)
                 .Record(bskyMetrics, "app.bsky.feed.getListFeed");
             var postTl = postTlRes.HandleResult();
-            posts = postTl
-                .Feed.Where(w => w.Reason == null)
+            posts = (postTl?.Feed ?? [])
+                .Where(w => w.Reason == null)
                 .Select(s => s.ToDbPost())
                 .AsQueryable()
                 .Where(filter)
@@ -73,7 +74,7 @@ public class ListImagesOnly(
                             .Take(50)
                             .ToListAsync(cancellationToken);
                     },
-                    BskyCache.QUICK_OPTS,
+                    BskyCache.QuickOpts,
                     tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
                     cancellationToken: cancellationToken
                 ) ?? [];
@@ -85,7 +86,7 @@ public class ListImagesOnly(
             newCursor = posts.LastOrDefault()?.GetCursor();
         }
 
-        var filteredFeed = posts.Select(s => new CustomSkeletonFeedPost(s.ToUri()));
+        var filteredFeed = posts.Select(s => new SkeletonFeedPost(s.ToAtUri()));
 
         return new CustomSkeletonFeed(filteredFeed.ToList(), newCursor);
     }

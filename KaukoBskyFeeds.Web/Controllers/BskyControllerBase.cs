@@ -23,11 +23,13 @@ public abstract class BskyControllerBase(IConfiguration configuration, ATProtoco
         {
             Session =
                 Proto.Session
-                ?? await Proto.AuthenticateWithPasswordAsync(
-                    BskyConfig.Auth.Username,
-                    BskyConfig.Auth.Password,
-                    cancellationToken: cancellationToken
-                )
+                ?? (
+                    await Proto.AuthenticateWithPasswordResultAsync(
+                        BskyConfig.Auth.Username,
+                        BskyConfig.Auth.Password,
+                        cancellationToken: cancellationToken
+                    )
+                ).HandleResult()
                 ?? throw new Exception("Failed to login");
         }
     }

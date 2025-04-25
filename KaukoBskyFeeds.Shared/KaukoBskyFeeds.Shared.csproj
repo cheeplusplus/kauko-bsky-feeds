@@ -6,7 +6,7 @@
     <RootNamespace>KaukoBskyFeeds.Shared</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="FishyFlip" Version="2.1.1" />
+    <PackageReference Include="FishyFlip" Version="3.9.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" Version="9.4.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.2" />
   </ItemGroup>

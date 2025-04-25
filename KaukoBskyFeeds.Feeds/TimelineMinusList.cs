@@ -1,7 +1,6 @@
-using System.Data;
 using FishyFlip;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
-using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
@@ -61,8 +60,13 @@ public class TimelineMinusList(
                 .Feed.GetTimelineAsync(cursor: cursor, cancellationToken: cancellationToken)
                 .Record(bskyMetrics, "app.bsky.feed.getTimeline");
             var postTl = postTlRes.HandleResult();
-            posts = postTl.Feed.Where(w => w.Reason == null).Select(s => s.ToDbPost()).ToList();
-            newCursor = postTl.Cursor;
+            posts = (postTl?.Feed ?? [])
+                .Where(w =>
+                    ((feedConfig.AlwaysShowUserReposts?.Count ?? 0) > 0) || w.Reason == null
+                )
+                .Select(s => s.ToDbPost())
+                .ToList();
+            newCursor = postTl?.Cursor;
         }
         else
         {
@@ -78,12 +82,13 @@ public class TimelineMinusList(
                             .Take(100)
                             .ToListAsync(cancellationToken);
                     },
-                    BskyCache.QUICK_OPTS,
-                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"]
+                    BskyCache.QuickOpts,
+                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                    cancellationToken: cancellationToken
                 ) ?? [];
         }
 
-        if (posts == null || posts.Count < 1 || cancellationToken.IsCancellationRequested)
+        if (posts.Count < 1 || cancellationToken.IsCancellationRequested)
         {
             return new CustomSkeletonFeed([], null);
         }
@@ -109,7 +114,7 @@ public class TimelineMinusList(
                 judgement = new PostJudgement(PostType.ErrorState, false);
             }
 
-            return new InFeedJudgedPost(judgement, s.ToUri(), s.EventTime);
+            return new InFeedJudgedPost(judgement, s.ToAtUri(), s.EventTime);
         });
 
         // We're doing this after judgement because at the moment, we're not reliably able to combine posts and reposts
@@ -130,9 +135,9 @@ public class TimelineMinusList(
                     new PostJudgement(
                         PostType.Repost,
                         true,
-                        RepostReason: new CustomSkeletonReasonRepost(s.ToUri())
+                        RepostReason: new SkeletonReasonRepost(s.ToAtUri())
                     ),
-                    s.ToParentPostUri(),
+                    s.ToParentPostAtUri(),
                     s.EventTime
                 ))
                 .ToList();
@@ -145,7 +150,7 @@ public class TimelineMinusList(
             .Take(limit ?? 50)
             .ToList();
         var feedOutput = filteredFeed
-            .Select(s => new CustomSkeletonFeedPost(
+            .Select(s => new SkeletonFeedPost(
                 s.PostUri,
                 s.Judgement.RepostReason,
                 $"Reason: {s.Judgement.Type}"
@@ -308,10 +313,10 @@ public class TimelineMinusList(
     private record PostJudgement(
         PostType Type,
         bool ShouldShow,
-        CustomSkeletonReasonRepost? RepostReason = null
+        SkeletonReasonRepost? RepostReason = null
     );
 
-    private record InFeedJudgedPost(PostJudgement Judgement, string PostUri, DateTime Cursor);
+    private record InFeedJudgedPost(PostJudgement Judgement, ATUri PostUri, DateTime Cursor);
 
     private enum PostType
     {

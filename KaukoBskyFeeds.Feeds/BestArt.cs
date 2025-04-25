@@ -1,4 +1,6 @@
 using FishyFlip;
+using FishyFlip.Lexicon.App.Bsky.Actor;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
@@ -65,7 +67,7 @@ public class BestArt(
                         .Take(FEED_LIMIT)
                         .ToListAsync(cancellationToken);
                 },
-                BskyCache.DEFAULT_OPTS,
+                BskyCache.DefaultOpts,
                 tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
                 cancellationToken: cancellationToken
             ) ?? [];
@@ -95,7 +97,7 @@ public class BestArt(
                     Post = s,
                 })
                 .Where(w => w.Author != null)
-                .Select(s => new SortedFeedResult(s.Post, ScorePostBalanced(s.Post, s.Author!)))
+                .Select(s => new SortedFeedResult(s.Post, ScorePostBalanced(s.Post, s.Author)))
                 .OrderByDescending(o => o.Score);
         }
         else
@@ -112,23 +114,20 @@ public class BestArt(
         }
 
         var feedOutput = sortedFeed
-            .Select(s => new CustomSkeletonFeedPost(
-                s.Post.ToUri(),
-                FeedContext: $"Score: {s.Score}"
-            ))
+            .Select(s => new SkeletonFeedPost(s.Post.ToAtUri(), feedContext: $"Score: {s.Score}"))
             .ToList();
 
         return new CustomSkeletonFeed(feedOutput, null);
     }
 
-    private static float ScorePostBalanced(PostWithInteractions post, FeedProfile author)
+    private static float ScorePostBalanced(PostWithInteractions post, ProfileViewDetailed? author)
     {
         // We're attempting to score a post in a 'fair' way that makes more things bubble up
         // where we don't just get things that are from popular artists or have had more time to get faves
 
         // Attempt to create a neutral score where the number of followers balances out the number of interactions
         // More interactions than followers is great
-        var followerNeutralScore = (float)post.TotalInteractions / author.FollowersCount;
+        var followerNeutralScore = (float)post.TotalInteractions / (author?.FollowersCount ?? 0);
 
         // Attempt to balance things out for time so we see newer stuff too
         // This shouldn't be as strong an influence as follower count

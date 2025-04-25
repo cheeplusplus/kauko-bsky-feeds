@@ -17,7 +17,7 @@ public class XrpcController(
 {
     [HttpGet("app.bsky.feed.getFeedSkeleton")]
     public async Task<
-        Results<NotFound, UnauthorizedHttpResult, Ok<CustomSkeletonFeed>>
+        Results<NotFound, UnauthorizedHttpResult, JsonHttpResult<CustomSkeletonFeed>>
     > GetFeedSkeleton(
         [FromServices] IServiceProvider sp,
         [FromHeader] string? authorization,
@@ -71,7 +71,7 @@ public class XrpcController(
                 cursor,
                 cancellationToken
             );
-            return TypedResults.Ok(feedSkel);
+            return TypedResults.Json(feedSkel, BskyExtensions.BskyJso);
         }
         catch (FeedProhibitedException)
         {

@@ -1,4 +1,5 @@
 using EFCore.BulkExtensions;
+using FishyFlip;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Ingest.Jetstream;
@@ -152,11 +153,14 @@ public class JetstreamWorker(
             {
                 return;
             }
-            await proto.AuthenticateWithPasswordAsync(
-                _bskyConfig.Auth.Username,
-                _bskyConfig.Auth.Password,
-                cancellationToken: cancellationToken
-            );
+
+            (
+                await proto.AuthenticateWithPasswordResultAsync(
+                    _bskyConfig.Auth.Username,
+                    _bskyConfig.Auth.Password,
+                    cancellationToken: cancellationToken
+                )
+            ).HandleResult();
         }
 
         return await memCache.GetOrCreateAsync(
@@ -167,12 +171,7 @@ public class JetstreamWorker(
                 List<string> wantedDids = [];
                 if (_ingestConfig.SingleCollection != null && _ingestConfig.Filter != null)
                 {
-                    if (
-                        _ingestConfig.Filter.TryGetValue(
-                            collection,
-                            out IngestFilterConfig? targetFilter
-                        )
-                    )
+                    if (_ingestConfig.Filter.TryGetValue(collection, out var targetFilter))
                     {
                         if (targetFilter.UserFollowsAndLists != null)
                         {
@@ -246,7 +245,7 @@ public class JetstreamWorker(
 
                 return wantedDids;
             },
-            BskyCache.DEFAULT_OPTS,
+            BskyCache.DefaultOpts,
             tags: ["ingest", "ingest/wantedDids"],
             cancellationToken: cancellationToken
         );

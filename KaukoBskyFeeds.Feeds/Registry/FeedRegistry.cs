@@ -2,6 +2,7 @@ using System.Reflection;
 using FishyFlip;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Shared;
+using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -38,7 +39,7 @@ public class FeedRegistry
                     ?? throw new Exception("Failed to parse feed configuration of " + feedCfg.Key),
                 feedCfg.Value.Config,
                 feedCfg.Key,
-                $"{bskyConfig.Identity.PublishedAtUri}/{Constants.FeedType.Generator}/{feedCfg.Key}"
+                $"{bskyConfig.Identity.PublishedAtUri}/{BskyConstants.COLLECTION_TYPE_FEED_GENERATOR}/{feedCfg.Key}"
             ))
             .ToList();
     }

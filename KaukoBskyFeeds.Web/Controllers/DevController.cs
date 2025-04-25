@@ -1,5 +1,7 @@
 using System.Globalization;
 using FishyFlip;
+using FishyFlip.Lexicon.App.Bsky.Actor;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
@@ -28,7 +30,7 @@ public class DevController(
 
     [HttpGet("previewFeed")]
     public async Task<
-        Results<NotFound, Ok<string>, JsonHttpResult<PostCollection>>
+        Results<NotFound, Ok<string>, JsonHttpResult<GetPostsOutput>>
     > GetHydratedFeed(
         [FromServices] IServiceProvider sp,
         string feed,
@@ -73,8 +75,8 @@ public class DevController(
         );
 
         // 25 is the limit for GetPostsAsync
-        var feedsInSize = feedSkel.Feed.Take(25).Select(s => new ATUri(s.Post));
-        if (!feedsInSize.Any())
+        var feedsInSize = feedSkel.Feed.Take(25).Select(s => s.Post).ToList();
+        if (feedsInSize.Count == 0)
         {
             return TypedResults.Ok("Feed is empty.");
         }
@@ -126,7 +128,7 @@ public class DevController(
     );
 
     [HttpGet("query/user")]
-    public async Task<Results<NotFound, JsonHttpResult<FeedProfile>>> QueryUser(
+    public async Task<Results<NotFound, JsonHttpResult<ProfileViewDetailed>>> QueryUser(
         [FromQuery] string handle,
         CancellationToken cancellationToken = default
     )
@@ -174,7 +176,7 @@ public class DevController(
         }
 
         var postRes = await Proto.Feed.GetPostsAsync([ATUri.Create(atUri)], cancellationToken);
-        var post = postRes.HandleResult().Posts.FirstOrDefault();
+        var post = postRes.HandleResult()?.Posts.FirstOrDefault();
         return TypedResults.Json(post, Proto.Options.JsonSerializerOptions);
     }
 
@@ -236,28 +238,35 @@ public class DevController(
                 continue;
             }
 
-            var record = new CustomFeedRecord(
-                BskyConfig.Identity.ServiceDid,
+            var record = new Generator(
+                ATDid.Create(BskyConfig.Identity.ServiceDid),
                 feed.FeedBaseConfig.DisplayName,
                 feed.FeedBaseConfig.Description,
-                DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)
-            );
-            var create = new CreateCustomFeedRecord(
-                Constants.FeedType.Generator,
-                Session.Did.ToString(),
-                record,
-                feed.FeedShortname
+                createdAt: DateTime.UtcNow
             );
 
-            var recordRefResult = await Proto.Repo.PutRecord(
-                create,
-                BskySourceGenerationContext.Default.CreateCustomFeedRecord,
-                BskySourceGenerationContext.Default.CustomRecordRef,
+            var recordRefResult = await Proto.Repo.PutRecordAsync(
+                Session.Did,
+                BskyConstants.COLLECTION_TYPE_FEED_GENERATOR,
+                feed.FeedShortname,
+                record,
+                validate: true,
                 cancellationToken: cancellationToken
             );
 
             var recordRef = recordRefResult.HandleResult();
-            logger.LogDebug("Installed {uri}: {status}", recordRef.Uri, recordRef.ValidationStatus);
+            if (recordRef != null)
+            {
+                logger.LogDebug(
+                    "Installed {uri}: {status}",
+                    recordRef.Uri,
+                    recordRef.ValidationStatus
+                );
+            }
+            else
+            {
+                logger.LogError("Failed to install {uri}", feed.FeedShortname);
+            }
         }
 
         return TypedResults.Ok("Done!");

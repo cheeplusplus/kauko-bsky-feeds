@@ -1,4 +1,5 @@
 using FishyFlip;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
@@ -70,7 +71,7 @@ public class LikesImagesOnly(
                             .ToListAsync(cancellationToken);
                     },
                     // match cache time on GetLikes
-                    BskyCache.DEFAULT_OPTS,
+                    BskyCache.DefaultOpts,
                     tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
                     cancellationToken: cancellationToken
                 ) ?? [];
@@ -82,7 +83,7 @@ public class LikesImagesOnly(
                 .ToList();
         }
 
-        var filteredFeed = posts.Select(s => new CustomSkeletonFeedPost(s.ToUri()));
+        var filteredFeed = posts.Select(s => new SkeletonFeedPost(s.ToAtUri()));
 
         return new CustomSkeletonFeed(filteredFeed.ToList(), null);
     }

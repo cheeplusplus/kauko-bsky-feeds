@@ -1,6 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using FishyFlip;
 using FishyFlip.Models;
+using FishyFlip.Tools.Json;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +17,28 @@ public delegate Task<(IEnumerable<T>?, string?)> BskyPageableList<T>(
 
 public static class BskyExtensions
 {
+    // copied from https://github.com/drasticactions/FishyFlip/blob/825143dc1b4370f9749ab23f3074e207adc63eea/src/FishyFlip/Lexicon/SourceGenerationContext.g.cs#L13
+    // _proto.Proto.Options.JsonSerializerOptions would work if we weren't using any custom types
+    public static readonly JsonSerializerOptions BskyJso = new()
+    {
+        WriteIndented = false,
+        PropertyNameCaseInsensitive = true,
+        Converters =
+        {
+            new ATUriJsonConverter(),
+            new ATCidJsonConverter(),
+            new ATHandleJsonConverter(),
+            new ATDidJsonConverter(),
+            new ATIdentifierJsonConverter(),
+            new ATWebSocketCommitTypeConverter(),
+            new ATWebSocketEventConverter(),
+            new ATObjectJsonConverter(),
+        },
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition =
+            JsonIgnoreCondition.WhenWritingNull | JsonIgnoreCondition.WhenWritingDefault,
+    };
+
     public static IServiceCollection AddBskyServices(
         this IServiceCollection collection,
         string? redisConnectionString = null
@@ -26,6 +52,10 @@ public static class BskyExtensions
             });
         }
 
+        collection.AddKeyedSingleton<JsonSerializerOptions>(
+            typeof(IHybridCacheSerializer<>),
+            BskyJso
+        );
         collection.AddHybridCache();
         collection.AddSingleton<IBskyCache, BskyCache>();
         collection.AddSingleton(f =>

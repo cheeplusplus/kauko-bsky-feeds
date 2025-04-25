@@ -1,10 +1,12 @@
 using System.Globalization;
+using FishyFlip.Lexicon.App.Bsky.Embed;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Shared.Bsky;
-using Microsoft.EntityFrameworkCore;
 using ATDid = FishyFlip.Models.ATDid;
 using ATUri = FishyFlip.Models.ATUri;
+using Post = KaukoBskyFeeds.Db.Models.Post;
 
 namespace KaukoBskyFeeds.Feeds.Utils;
 
@@ -14,7 +16,6 @@ public static class PostExtensions
     /// Get the latest posts, optionally with a cursor.
     /// </summary>
     /// <param name="postTable">Table to query.</param>
-    /// <param name="limit">Maximum posts to pull.</param>
     /// <param name="cursor">Cursor to resume from.</param>
     /// <returns>Queryable</returns>
     public static IQueryable<T> LatestFromCursor<T>(this IQueryable<T> postTable, string? cursor)
@@ -67,6 +68,11 @@ public static class PostExtensions
         return $"at://{recordRef.Did}/{collectionType}/{recordRef.Rkey}";
     }
 
+    public static ATUri ToAtUri(this PostRecordRef recordRef, string collectionType)
+    {
+        return ATUri.Create(ToUri(recordRef, collectionType));
+    }
+
     public static string ToUri(this IPostRecord post)
     {
         return ToUri(post.Ref, post.ToCollectionType());
@@ -80,6 +86,11 @@ public static class PostExtensions
     public static string ToParentPostUri(this IPostInteraction repost)
     {
         return $"at://{repost.ParentRef.Did}/{BskyConstants.COLLECTION_TYPE_POST}/{repost.ParentRef.Rkey}";
+    }
+
+    public static ATUri ToParentPostAtUri(this IPostInteraction repost)
+    {
+        return ATUri.Create(ToParentPostUri(repost));
     }
 
     public static ATDid GetAuthorDid(this IPostRecord post)
@@ -113,7 +124,7 @@ public static class PostExtensions
         return atUri != null ? ATDid.Create(atUri.Hostname) : null;
     }
 
-    public static Post ToDbPost(this FishyFlip.Models.PostView postView)
+    public static Post ToDbPost(this PostView postView)
     {
         if (postView.Record == null)
         {
@@ -124,28 +135,30 @@ public static class PostExtensions
         var rkey = postView.Uri.Rkey;
 
         var imageCount = 0;
-        if (postView.Embed is FishyFlip.Models.ImageViewEmbed ie && ie.Images != null)
+        if (postView.Embed is ViewImages ie)
         {
-            imageCount = ie.Images.Length;
+            imageCount = ie.Images.Count;
         }
         string? embedRecordUri = null;
-        if (postView.Embed is FishyFlip.Models.RecordViewEmbed rve)
+        if (postView.Embed is ViewRecordDef { Record: PostView rvep })
         {
-            embedRecordUri = rve.Record.Uri.ToString();
+            embedRecordUri = rvep.Uri.ToString();
         }
-        if (postView.Embed is FishyFlip.Models.RecordWithMediaViewEmbed rme)
+        if (postView.Embed is ViewRecordWithMedia { Record.Record: PostView rmep })
         {
-            embedRecordUri = rme.Record?.Record.Uri.ToString();
+            embedRecordUri = rmep.Uri.ToString();
         }
+
+        var indexedAt = postView.IndexedAt ?? DateTime.UtcNow;
 
         return new Post
         {
             Did = did,
             Rkey = rkey,
-            EventTime = postView.IndexedAt,
-            EventTimeUs = postView.IndexedAt.ToMicroseconds(),
-            CreatedAt = postView.Record.CreatedAt ?? DateTime.MinValue,
-            Text = postView.Record.Text ?? string.Empty,
+            EventTime = indexedAt,
+            EventTimeUs = indexedAt.ToMicroseconds(),
+            CreatedAt = postView.PostRecord?.CreatedAt ?? DateTime.MinValue,
+            Text = postView.PostRecord?.Text ?? string.Empty,
             ReplyParentUri = null,
             ReplyRootUri = null,
             EmbedType = postView.Embed?.Type,
@@ -154,11 +167,11 @@ public static class PostExtensions
         };
     }
 
-    public static Post ToDbPost(this FishyFlip.Models.FeedViewPost feedPost)
+    public static Post ToDbPost(this FeedViewPost feedPost)
     {
         var post = ToDbPost(feedPost.Post);
-        post.ReplyParentUri = feedPost.Reply?.Parent?.Uri?.ToString();
-        post.ReplyRootUri = feedPost.Reply?.Root?.Uri?.ToString();
+        post.ReplyParentUri = (feedPost.Reply?.Parent as PostView)?.Uri.ToString();
+        post.ReplyRootUri = (feedPost.Reply?.Root as PostView)?.Uri.ToString();
 
         return post;
     }

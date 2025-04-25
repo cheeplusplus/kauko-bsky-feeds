@@ -2,6 +2,7 @@ namespace KaukoBskyFeeds.Shared.Bsky;
 
 public static class BskyConstants
 {
+    public const string COLLECTION_TYPE_FEED_GENERATOR = "app.bsky.feed.generator";
     public const string COLLECTION_TYPE_POST = "app.bsky.feed.post";
     public const string COLLECTION_TYPE_LIKE = "app.bsky.feed.like";
     public const string COLLECTION_TYPE_REPOST = "app.bsky.feed.repost";

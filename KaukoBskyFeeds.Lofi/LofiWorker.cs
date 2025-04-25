@@ -161,7 +161,8 @@ public class LofiWorker(
         var posts = new string?[] { msg.ToAtUri(), post.Reply?.Parent?.Uri, post.Reply?.Root?.Uri }
             .WhereNotNull()
             .Select(ATUri.Create)
-            .WhereNotNull();
+            .WhereNotNull()
+            .ToList();
 
         var hydratedReq = await proto.Feed.GetPostsAsync(posts, _cts.Token);
         var hydrated = hydratedReq.HandleResult();
@@ -194,11 +195,13 @@ public class LofiWorker(
         {
             _session =
                 proto.Session
-                ?? await proto.AuthenticateWithPasswordAsync(
-                    _bskyAuthConfig.Username,
-                    _bskyAuthConfig.Password,
-                    cancellationToken: cancellationToken
-                )
+                ?? (
+                    await proto.AuthenticateWithPasswordResultAsync(
+                        _bskyAuthConfig.Username,
+                        _bskyAuthConfig.Password,
+                        cancellationToken: cancellationToken
+                    )
+                ).HandleResult()
                 ?? throw new Exception("Failed to login");
         }
     }

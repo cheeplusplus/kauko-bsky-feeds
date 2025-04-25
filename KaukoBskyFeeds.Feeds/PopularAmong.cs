@@ -1,6 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using FishyFlip;
+using FishyFlip.Lexicon.App.Bsky.Embed;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
@@ -118,46 +120,44 @@ public class PopularAmong(
                             Count = s.Interactions,
                             Ref = new PostRecordRef(s.Did, s.Rkey),
                         })
-                        .Select(s => new
-                        {
-                            s.Count,
-                            s.Ref,
-                            PostUri = s.Ref.ToUri(BskyConstants.COLLECTION_TYPE_POST),
-                        });
+                        .Select(s => new { s.Count, s.Ref });
                 },
-                BskyCache.DEFAULT_OPTS,
+                BskyCache.DefaultOpts,
                 tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
                 cancellationToken: cancellationToken
             ) ?? [];
+        var allInteractionsUseful = allInteractions
+            .Select(s => new
+            {
+                s.Count,
+                s.Ref,
+                PostUri = s.Ref.ToAtUri(BskyConstants.COLLECTION_TYPE_POST),
+            })
+            .ToList();
 
         if (feedConfig is { ImagesOnly: true, ImagesChecksServer: true })
         {
-            var ilist = allInteractions.ToList();
             // Fetch and filter posts from the server, to if they have image embeds
             var posts = await bsCache.GetPosts(
                 proto,
-                ilist.Select(s => ATUri.Create(s.PostUri)),
+                allInteractionsUseful.Select(s => s.PostUri),
                 cancellationToken
             );
             var postsWithImages = posts
                 .Where(w =>
                     w?.Embed
-                        is ImageViewEmbed { Images.Length: > 0 }
-                            or RecordWithMediaViewEmbed
-                            {
-                                Embed: ImagesEmbed { Images.Length: > 0 }
-                            }
+                        is ViewImages { Images.Count: > 0 }
+                            or ViewRecordWithMedia { Media: ViewImages { Images.Count: > 0 } }
                 )
                 .Select(s => new PostRecordRef(s?.Uri.Did?.ToString() ?? "", s?.Uri.Rkey ?? ""));
-            allInteractions = ilist.Where(w => postsWithImages.Contains(w.Ref));
+            allInteractionsUseful = allInteractionsUseful
+                .Where(w => postsWithImages.Contains(w.Ref))
+                .ToList();
         }
 
-        var filteredFeed = allInteractions
+        var filteredFeed = allInteractionsUseful
             .OrderByDescending(o => o.Count)
-            .Select(s => new CustomSkeletonFeedPost(
-                s.PostUri,
-                FeedContext: $"{s.Count} interactions"
-            ));
+            .Select(s => new SkeletonFeedPost(s.PostUri, feedContext: $"{s.Count} interactions"));
 
         return new CustomSkeletonFeed(filteredFeed.ToList(), null);
     }

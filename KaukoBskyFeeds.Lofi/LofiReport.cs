@@ -1,17 +1,18 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FishyFlip.Lexicon.App.Bsky.Embed;
+using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 
 namespace KaukoBskyFeeds.Lofi;
 
 public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? ReplyRootPost)
 {
-    private static readonly JsonSerializerOptions JsonOptions =
-        new()
-        {
-            DefaultIgnoreCondition =
-                JsonIgnoreCondition.WhenWritingDefault | JsonIgnoreCondition.WhenWritingNull,
-        };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        DefaultIgnoreCondition =
+            JsonIgnoreCondition.WhenWritingDefault | JsonIgnoreCondition.WhenWritingNull,
+    };
 
     public void Print(LofiConfig? opts = null)
     {
@@ -20,7 +21,11 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
         Console.WriteLine("".PadRight(Console.WindowWidth / 2, '-'));
 
         Console.ForegroundColor = ConsoleColor.DarkBlue;
-        var postTime = Post.Record?.CreatedAt?.ToLocalTime() ?? Post.IndexedAt.ToLocalTime();
+
+        var postTime =
+            Post.PostRecord?.CreatedAt?.ToLocalTime()
+            ?? Post.IndexedAt?.ToLocalTime()
+            ?? DateTime.MinValue;
         var dateStr = (DateTime.Now - postTime).Days > 0 ? postTime.ToShortDateString() + " " : "";
         Console.Write($"[{dateStr}{postTime.ToShortTimeString()}] ");
 
@@ -43,7 +48,7 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
         Console.Write(" ");
 
         Console.ForegroundColor = ConsoleColor.Blue;
-        var postUrl = LofiUtils.AtUriToBskyUrl(Post.Uri, Post.Author.Handle);
+        var postUrl = LofiUtils.AtUriToBskyUrl(Post.Uri, Post.Author.Handle.Handle);
         Console.Write(LofiUtils.TerminalURL($"({postUrl})", postUrl));
         Console.ForegroundColor = ConsoleColor.Gray;
 
@@ -54,7 +59,7 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
             static void printReplyPost(PostView pv, string inner)
             {
                 Console.ForegroundColor = ConsoleColor.DarkCyan;
-                Console.Write($"  [{pv.Record?.CreatedAt?.ToLocalTime().ToString("g")}] ");
+                Console.Write($"  [{pv.PostRecord?.CreatedAt?.ToLocalTime().ToString("g")}] ");
                 Console.Write(pv.Author.DisplayName);
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.Write($" @{pv.Author.Handle}");
@@ -62,9 +67,9 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
                 Console.WriteLine($" {inner}:");
                 Console.ForegroundColor = ConsoleColor.Cyan;
 
-                if (pv.Record?.Text != null)
+                if (pv.PostRecord?.Text != null)
                 {
-                    var textLines = pv.Record.Text.Split('\n');
+                    var textLines = pv.PostRecord.Text.Split('\n');
                     foreach (var iline in textLines)
                     {
                         Console.ForegroundColor = ConsoleColor.Black;
@@ -95,7 +100,7 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
             }
         }
 
-        if (string.IsNullOrWhiteSpace(Post.Record?.Text))
+        if (string.IsNullOrWhiteSpace(Post.PostRecord?.Text))
         {
             Console.ForegroundColor = ConsoleColor.DarkRed;
             Console.WriteLine("(no text)");
@@ -103,7 +108,7 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
         else
         {
             Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(Post.Record.Text);
+            Console.WriteLine(Post.PostRecord.Text);
         }
 
         // Line 3
@@ -111,9 +116,9 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
         {
             Console.WriteLine();
             Console.ForegroundColor = ConsoleColor.DarkMagenta;
-            if (Post.Embed is ImageViewEmbed imagesEmbed)
+            if (Post.Embed is ViewImages imagesEmbed)
             {
-                Console.Write($"Has {imagesEmbed.Images.Length} image(s): ");
+                Console.Write($"Has {imagesEmbed.Images.Count} image(s): ");
                 var imgLabels = imagesEmbed.Images.Select(img =>
                     LofiUtils.TerminalURL(
                         string.IsNullOrWhiteSpace(img.Alt) ? "(image)" : img.Alt,
@@ -122,16 +127,16 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
                 );
                 Console.Write(string.Join(" > ", imgLabels));
             }
-            else if (Post.Embed is RecordViewEmbed recordEmbed)
+            else if (Post.Embed is ViewRecordDef { Record: PostView recordEmbedPost })
             {
                 var embedUrl = LofiUtils.AtUriToBskyUrl(
-                    recordEmbed.Post.Uri,
-                    recordEmbed.Post.Author.Handle
+                    recordEmbedPost.Uri,
+                    recordEmbedPost.Author.Handle.Handle
                 );
                 Console.Write("References post: ");
                 Console.Write(LofiUtils.TerminalURL(embedUrl, embedUrl));
             }
-            else if (Post.Embed is ExternalViewEmbed externEmbed)
+            else if (Post.Embed is ViewExternal externEmbed)
             {
                 Console.Write("Has external link: ");
                 Console.Write(externEmbed.External.Uri ?? externEmbed.External.ToString());
@@ -139,7 +144,7 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
             else
             {
                 Console.Write("Other embed: ");
-                Console.Write(JsonSerializer.Serialize(Post.Embed, JsonOptions));
+                Console.Write(Post.Embed.ToJson());
             }
             Console.WriteLine();
         }

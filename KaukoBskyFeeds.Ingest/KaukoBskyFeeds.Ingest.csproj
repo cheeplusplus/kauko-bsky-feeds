@@ -12,10 +12,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FishyFlip" Version="2.1.1" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.HttpListener" Version="1.11.0-beta.1" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.11.1" />
+    <PackageReference Include="FishyFlip" Version="3.9.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.HttpListener" Version="1.11.2-beta.1" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.11.2" />
   </ItemGroup>
 
   <ItemGroup>
