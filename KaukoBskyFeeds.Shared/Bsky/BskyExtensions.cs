@@ -57,7 +57,7 @@ public static class BskyExtensions
             BskyJso
         );
         collection.AddHybridCache();
-        collection.AddSingleton<IBskyCache, BskyCache>();
+        collection.AddSingleton(BskyCacheAutoRetry.Create);
         collection.AddSingleton(f =>
         {
             var logger = f.GetService<ILogger<ATProtocol>>();
@@ -112,6 +112,7 @@ public static class BskyExtensions
         {
             return dt;
         }
+
         return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
     }
 
