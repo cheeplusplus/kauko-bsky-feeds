@@ -10,6 +10,7 @@ public record TimelineMinusListFeedConfig(
     bool Install = false,
     bool RestrictToFeedOwner = false,
     bool FetchTimeline = false,
+    List<string>? AdditionalLists = null,
     List<string>? AlwaysShowListUser = null,
     List<string>? AlwaysShowUserReposts = null,
     List<string>? MuteUsers = null,

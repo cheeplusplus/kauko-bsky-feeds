@@ -177,6 +177,13 @@
                             "description": "Fetch the timeline instead of using the cache",
                             "type": "boolean"
                         },
+                        "AdditionalLists": {
+                            "description": "Additional lists to filter out",
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/atUriForList"
+                            }
+                        },
                         "AlwaysShowListUser": {
                             "description": "List users to always show",
                             "type": "array",

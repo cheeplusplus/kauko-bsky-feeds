@@ -52,6 +52,22 @@ public class TimelineMinusList(
             cancellationToken
         );
 
+        // Add any additional lists' members
+        if (feedConfig.AdditionalLists?.Count > 0)
+        {
+            foreach (var listUri in feedConfig.AdditionalLists)
+            {
+                var moreListMemberDids = await bsCache.GetListMembers(
+                    proto,
+                    new ATUri(listUri),
+                    cancellationToken
+                );
+                listMemberDids = listMemberDids.Concat(moreListMemberDids);
+            }
+        }
+
+        listMemberDids = listMemberDids.Distinct().ToList();
+
         List<Post> posts;
         string? newCursor = null;
         if (feedConfig.FetchTimeline)
