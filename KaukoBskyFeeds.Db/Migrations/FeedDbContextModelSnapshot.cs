@@ -18,7 +18,7 @@ namespace KaukoBskyFeeds.Db.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "9.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -67,6 +67,9 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.HasIndex("EventTime")
                         .IsDescending();
+
+                    b.HasIndex("Did", "EventTime")
+                        .IsDescending(false, true);
 
                     b.ToTable("Posts");
                 });
