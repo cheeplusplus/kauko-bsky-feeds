@@ -1,19 +1,10 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using FishyFlip.Lexicon.App.Bsky.Embed;
 using FishyFlip.Lexicon.App.Bsky.Feed;
-using FishyFlip.Models;
 
 namespace KaukoBskyFeeds.Lofi;
 
 public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? ReplyRootPost)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        DefaultIgnoreCondition =
-            JsonIgnoreCondition.WhenWritingDefault | JsonIgnoreCondition.WhenWritingNull,
-    };
-
     public void Print(LofiConfig? opts = null)
     {
         Console.ForegroundColor = ConsoleColor.Gray;
@@ -49,14 +40,14 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
 
         Console.ForegroundColor = ConsoleColor.Blue;
         var postUrl = LofiUtils.AtUriToBskyUrl(Post.Uri, Post.Author.Handle.Handle);
-        Console.Write(LofiUtils.TerminalURL($"({postUrl})", postUrl));
+        Console.Write(LofiUtils.TerminalUrl($"({postUrl})", postUrl));
         Console.ForegroundColor = ConsoleColor.Gray;
 
         Console.WriteLine();
 
         if (ReplyParentPost != null)
         {
-            static void printReplyPost(PostView pv, string inner)
+            static void PrintReplyPost(PostView pv, string inner)
             {
                 Console.ForegroundColor = ConsoleColor.DarkCyan;
                 Console.Write($"  [{pv.PostRecord?.CreatedAt?.ToLocalTime().ToString("g")}] ");
@@ -89,14 +80,14 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
 
             if (ReplyRootPost != null)
             {
-                printReplyPost(ReplyRootPost, "posted");
+                PrintReplyPost(ReplyRootPost, "posted");
             }
             if (
                 ReplyParentPost != null
                 && ReplyParentPost.Uri.ToString() != ReplyRootPost?.Uri.ToString()
             )
             {
-                printReplyPost(ReplyParentPost, "replied to above");
+                PrintReplyPost(ReplyParentPost, "replied to above");
             }
         }
 
@@ -120,7 +111,7 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
             {
                 Console.Write($"Has {imagesEmbed.Images.Count} image(s): ");
                 var imgLabels = imagesEmbed.Images.Select(img =>
-                    LofiUtils.TerminalURL(
+                    LofiUtils.TerminalUrl(
                         string.IsNullOrWhiteSpace(img.Alt) ? "(image)" : img.Alt,
                         img.Fullsize
                     )
@@ -134,12 +125,12 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
                     recordEmbedPost.Author.Handle.Handle
                 );
                 Console.Write("References post: ");
-                Console.Write(LofiUtils.TerminalURL(embedUrl, embedUrl));
+                Console.Write(LofiUtils.TerminalUrl(embedUrl, embedUrl));
             }
             else if (Post.Embed is ViewExternal externEmbed)
             {
                 Console.Write("Has external link: ");
-                Console.Write(externEmbed.External.Uri ?? externEmbed.External.ToString());
+                Console.Write(externEmbed.External.Uri);
             }
             else
             {

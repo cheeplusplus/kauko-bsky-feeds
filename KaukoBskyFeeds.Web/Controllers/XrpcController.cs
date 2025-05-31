@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using FishyFlip;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared.Bsky;
@@ -12,8 +13,8 @@ public class XrpcController(
     ILogger<XrpcController> logger,
     IConfiguration configuration,
     FeedRegistry feedRegistry,
-    ATProtocol _proto
-) : BskyControllerBase(configuration, _proto)
+    ATProtocol proto
+) : BskyControllerBase(configuration, proto)
 {
     [HttpGet("app.bsky.feed.getFeedSkeleton")]
     public async Task<
@@ -50,7 +51,7 @@ public class XrpcController(
         }
 
         // Handle feed owner restriction
-        if (feedInstance.Config.RestrictToFeedOwner && requestingDid != Session?.Did)
+        if (feedInstance.Config.RestrictToFeedOwner && Equals(requestingDid, Session?.Did))
         {
             return TypedResults.Unauthorized();
         }
@@ -89,8 +90,10 @@ public class XrpcController(
         );
     }
 
+    [SuppressMessage("ReSharper", "NotAccessedPositionalProperty.Global")]
     public record DescribeFeedGeneratorFeed(string Uri);
 
+    [SuppressMessage("ReSharper", "NotAccessedPositionalProperty.Global")]
     public record DescribeFeedGeneratorResponse(
         string Did,
         IEnumerable<DescribeFeedGeneratorFeed> Feeds

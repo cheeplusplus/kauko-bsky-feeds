@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using FishyFlip;
+﻿using FishyFlip;
 using FishyFlip.Lexicon.App.Bsky.Embed;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
@@ -51,7 +49,8 @@ public class PopularAmong(
                 requestor ?? proto.Session.Did,
                 cancellationToken
             ),
-            PopularAmongGroupSetting.Mutuals => await GetMutuals(
+            PopularAmongGroupSetting.Mutuals => await bsCache.GetMutuals(
+                proto,
                 requestor ?? proto.Session.Did,
                 cancellationToken
             ),
@@ -59,79 +58,78 @@ public class PopularAmong(
         };
         var targetListStr = targetDids.Select(s => s.Handler).ToList();
 
-        var allInteractions =
-            await mCache.GetOrCreateAsync(
-                $"feed_db_{feedMeta.FeedUri}",
-                async (_) =>
-                {
-                    var qLikes = db
-                        .PostLikes.Where(w => targetListStr.Contains(w.LikeDid))
-                        .Select(s => new
-                        {
-                            Interactor = s.LikeDid,
-                            Did = s.ParentDid,
-                            Rkey = s.ParentRkey,
-                        });
-                    var qReposts = db
-                        .PostReposts.Where(w => targetListStr.Contains(w.RepostDid))
-                        .Select(s => new
-                        {
-                            Interactor = s.RepostDid,
-                            Did = s.ParentDid,
-                            Rkey = s.ParentRkey,
-                        });
-                    var qQuotePosts = db
-                        .PostQuotePosts.Where(w => targetListStr.Contains(w.QuoteDid))
-                        .Select(s => new
-                        {
-                            Interactor = s.QuoteDid,
-                            Did = s.ParentDid,
-                            Rkey = s.ParentRkey,
-                        });
-                    var qJoined = qLikes.Union(qReposts).Union(qQuotePosts).Distinct();
-                    var qFinal = qJoined
-                        .GroupBy(g => new { g.Did, g.Rkey })
-                        .Select(s => new
-                        {
-                            Interactions = s.Count(),
-                            s.Key.Did,
-                            s.Key.Rkey,
-                        });
-                    if (feedConfig is { ImagesOnly: true, ImagesChecksServer: false })
+        var allInteractions = await mCache.GetOrCreateAsync(
+            $"feed_db_{feedMeta.FeedUri}",
+            async (_) =>
+            {
+                var qLikes = db
+                    .PostLikes.Where(w => targetListStr.Contains(w.LikeDid))
+                    .Select(s => new
                     {
-                        var qPosts = db.Posts.Where(w => w.ImageCount > 0);
-                        qFinal = qFinal.Join(
-                            qPosts,
-                            ok => new { ok.Did, ok.Rkey },
-                            ik => new { ik.Did, ik.Rkey },
-                            (outer, inner) => outer
-                        );
-                    }
+                        Interactor = s.LikeDid,
+                        Did = s.ParentDid,
+                        Rkey = s.ParentRkey,
+                    });
+                var qReposts = db
+                    .PostReposts.Where(w => targetListStr.Contains(w.RepostDid))
+                    .Select(s => new
+                    {
+                        Interactor = s.RepostDid,
+                        Did = s.ParentDid,
+                        Rkey = s.ParentRkey,
+                    });
+                var qQuotePosts = db
+                    .PostQuotePosts.Where(w => targetListStr.Contains(w.QuoteDid))
+                    .Select(s => new
+                    {
+                        Interactor = s.QuoteDid,
+                        Did = s.ParentDid,
+                        Rkey = s.ParentRkey,
+                    });
+                var qJoined = qLikes.Union(qReposts).Union(qQuotePosts).Distinct();
+                var qFinal = qJoined
+                    .GroupBy(g => new { g.Did, g.Rkey })
+                    .Select(s => new
+                    {
+                        Interactions = s.Count(),
+                        s.Key.Did,
+                        s.Key.Rkey,
+                    });
+                if (feedConfig is { ImagesOnly: true, ImagesChecksServer: false })
+                {
+                    var qPosts = db.Posts.Where(w => w.ImageCount > 0);
+                    qFinal = qFinal.Join(
+                        qPosts,
+                        ok => new { ok.Did, ok.Rkey },
+                        ik => new { ik.Did, ik.Rkey },
+                        (outer, inner) => outer
+                    );
+                }
 
-                    qFinal = qFinal
-                        .Where(w => w.Interactions >= feedConfig.MinRelevance)
-                        .OrderByDescending(o => o.Interactions)
-                        .Take(limit ?? 50);
+                qFinal = qFinal
+                    .Where(w => w.Interactions >= feedConfig.MinRelevance)
+                    .OrderByDescending(o => o.Interactions)
+                    .Take(limit ?? 50);
 
-                    // var req = await q.ToListAsync(cancellationToken);
-                    var req = await qFinal.ToListAsync(cancellationToken);
-                    return req.Select(s => new
-                        {
-                            Count = s.Interactions,
-                            Ref = new PostRecordRef(s.Did, s.Rkey),
-                        })
-                        .Select(s => new { s.Count, s.Ref });
-                },
-                BskyCache.DefaultOpts,
-                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
-                cancellationToken: cancellationToken
-            ) ?? [];
+                // var req = await q.ToListAsync(cancellationToken);
+                var req = await qFinal.ToListAsync(cancellationToken);
+                return req.Select(s => new
+                    {
+                        Count = s.Interactions,
+                        Ref = new PostRecordRef(s.Did, s.Rkey),
+                    })
+                    .Select(s => new { s.Count, s.Ref });
+            },
+            BskyCache.DefaultOpts,
+            tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+            cancellationToken: cancellationToken
+        );
         var allInteractionsUseful = allInteractions
             .Select(s => new
             {
                 s.Count,
                 s.Ref,
-                PostUri = s.Ref.ToAtUri(BskyConstants.COLLECTION_TYPE_POST),
+                PostUri = s.Ref.ToAtUri(BskyConstants.CollectionTypePost),
             })
             .ToList();
 
@@ -160,37 +158,5 @@ public class PopularAmong(
             .Select(s => new SkeletonFeedPost(s.PostUri, feedContext: $"{s.Count} interactions"));
 
         return new CustomSkeletonFeed(filteredFeed.ToList(), null);
-    }
-
-    private async Task<IEnumerable<ATDid>> GetMutuals(
-        ATDid user,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var followingList = await bsCache.GetFollowing(proto, user, cancellationToken);
-        var followersList = await bsCache.GetFollowers(proto, user, cancellationToken);
-
-        return followingList
-            .Select(s => s.Handler)
-            .Intersect(followersList.Select(s => s.Handler))
-            .Select(ATDid.Create)
-            .Where(w => w != null)
-            .Cast<ATDid>()
-            .ToList();
-    }
-
-    private class InteractionQueryResult
-    {
-        [Required]
-        [Column("interactions")]
-        public required int Interactions { get; set; }
-
-        [Required]
-        [Column("did")]
-        public required string Did { get; set; }
-
-        [Required]
-        [Column("rkey")]
-        public required string Rkey { get; set; }
     }
 }

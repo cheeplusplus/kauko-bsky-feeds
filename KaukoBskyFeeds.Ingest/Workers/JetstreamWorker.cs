@@ -22,7 +22,7 @@ public class JetstreamWorker(
     IHostApplicationLifetime lifetime,
     FeedDbContext db,
     IngestMetrics metrics,
-    FishyFlip.ATProtocol proto,
+    ATProtocol proto,
     IBskyCache bskyCache,
     HybridCache memCache,
     IJetstreamConsumer consumer
@@ -37,7 +37,7 @@ public class JetstreamWorker(
     private DateTime _lastSave = DateTime.MinValue;
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
-    private int _saveFailureCount = 0;
+    private int _saveFailureCount;
     private readonly BulkInsertHolder _insertHolder = new(db, metrics);
 
     private int SaveMaxSec => _ingestConfig.SaveMaxSec;
@@ -80,7 +80,7 @@ public class JetstreamWorker(
             // Check all the tables belonging to real collections for the latest event we've seen
             // Filter so we can run different copies of ingest with different collections
             long? latestEvent = null;
-            if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_POST))
+            if (Collections == null || Collections.Contains(BskyConstants.CollectionTypePost))
             {
                 var latest = await db
                     .Posts.OrderByDescending(o => o.EventTime)
@@ -90,7 +90,7 @@ public class JetstreamWorker(
                     latestEvent = latest.EventTimeUs;
                 }
             }
-            if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_LIKE))
+            if (Collections == null || Collections.Contains(BskyConstants.CollectionTypeLike))
             {
                 var latest = await db
                     .PostLikes.OrderByDescending(o => o.EventTime)
@@ -100,7 +100,7 @@ public class JetstreamWorker(
                     latestEvent = latest.EventTimeUs;
                 }
             }
-            if (Collections == null || Collections.Contains(BskyConstants.COLLECTION_TYPE_REPOST))
+            if (Collections == null || Collections.Contains(BskyConstants.CollectionTypeRepost))
             {
                 var latest = await db
                     .PostReposts.OrderByDescending(o => o.EventTime)
@@ -113,7 +113,7 @@ public class JetstreamWorker(
 
             if (!latestEvent.HasValue)
             {
-                if (_ingestConfig?.ConsumeHistoricFeed ?? false)
+                if (_ingestConfig.ConsumeHistoricFeed)
                 {
                     logger.LogInformation("No events found, starting from earliest available");
                     return 0;
@@ -383,15 +383,15 @@ public class JetstreamWorker(
     {
         metrics.IngestEvent(message.Commit?.Collection ?? "_unknown_", message.MessageTime);
 
-        if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_POST)
+        if (message.Commit?.Collection == BskyConstants.CollectionTypePost)
         {
             await HandleMessage_Post(message, cancellationToken);
         }
-        else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_LIKE)
+        else if (message.Commit?.Collection == BskyConstants.CollectionTypeLike)
         {
             await HandleMessage_Like(message, cancellationToken);
         }
-        else if (message.Commit?.Collection == BskyConstants.COLLECTION_TYPE_REPOST)
+        else if (message.Commit?.Collection == BskyConstants.CollectionTypeRepost)
         {
             await HandleMessage_Repost(message, cancellationToken);
         }
@@ -489,8 +489,8 @@ public class JetstreamWorker(
         {
             _insertHolder.Delete(
                 new PostRecordRef(message.Did, message.Commit.RecordKey),
-                db =>
-                    db.PostLikes.Where(w =>
+                d =>
+                    d.PostLikes.Where(w =>
                         w.LikeDid == message.Did && w.LikeRkey == message.Commit.RecordKey
                     )
             );
@@ -511,7 +511,7 @@ public class JetstreamWorker(
         CancellationToken cancellationToken = default
     )
     {
-        if (message.Commit?.Record is not AppBskyFeedRepost commitRecord)
+        if (message.Commit?.Record is not AppBskyFeedRepost)
         {
             return;
         }
@@ -549,8 +549,8 @@ public class JetstreamWorker(
         {
             _insertHolder.Delete(
                 new PostRecordRef(message.Did, message.Commit.RecordKey),
-                db =>
-                    db.PostReposts.Where(w =>
+                d =>
+                    d.PostReposts.Where(w =>
                         w.RepostDid == message.Did && w.RepostRkey == message.Commit.RecordKey
                     )
             );
@@ -580,27 +580,28 @@ public class JetstreamWorker(
 
 class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
 {
-    private readonly Dictionary<PostRecordRef, Post> Posts = [];
-    private readonly List<IQueryable<Post>> PostDeletes = [];
-    private readonly Dictionary<PostRecordRef, PostLike> PostLikes = [];
-    private readonly List<IQueryable<PostLike>> PostLikeDeletes = [];
-    private readonly Dictionary<PostRecordRef, PostQuotePost> PostQuotePosts = [];
-    private readonly List<IQueryable<PostQuotePost>> PostQuoteDeletes = [];
-    private readonly Dictionary<PostRecordRef, PostReply> PostReplies = [];
-    private readonly List<IQueryable<PostReply>> PostReplyDeletes = [];
-    private readonly Dictionary<PostRecordRef, PostRepost> PostReposts = [];
-    private readonly List<IQueryable<PostRepost>> PostRepostDeletes = [];
+    private readonly Dictionary<PostRecordRef, Post> _posts = [];
+    private readonly List<IQueryable<Post>> _postDeletes = [];
+    private readonly Dictionary<PostRecordRef, PostLike> _postLikes = [];
+    private readonly List<IQueryable<PostLike>> _postLikeDeletes = [];
+    private readonly Dictionary<PostRecordRef, PostQuotePost> _postQuotePosts = [];
+    private readonly List<IQueryable<PostQuotePost>> _postQuoteDeletes = [];
+    private readonly Dictionary<PostRecordRef, PostReply> _postReplies = [];
+    private readonly List<IQueryable<PostReply>> _postReplyDeletes = [];
+    private readonly Dictionary<PostRecordRef, PostRepost> _postReposts = [];
+    private readonly List<IQueryable<PostRepost>> _postRepostDeletes = [];
 
     public void Add(Post item, PostReply? reply, PostQuotePost? quotePost)
     {
-        Posts.TryAdd(item.Ref, item);
+        _posts.TryAdd(item.Ref, item);
         if (reply != null)
         {
-            PostReplies.TryAdd(reply.Ref, reply);
+            _postReplies.TryAdd(reply.Ref, reply);
         }
+
         if (quotePost != null)
         {
-            PostQuotePosts.TryAdd(quotePost.Ref, quotePost);
+            _postQuotePosts.TryAdd(quotePost.Ref, quotePost);
         }
     }
 
@@ -608,88 +609,90 @@ class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
     {
         var key = new PostRecordRef(did, rkey);
 
-        PostDeletes.Add(db.Posts.Where(w => w.Did == did && w.Rkey == rkey));
-        Posts.Remove(key);
-        PostLikeDeletes.Add(db.PostLikes.Where(w => w.ParentDid == did && w.ParentRkey == rkey));
-        PostLikes.Remove(key);
-        PostQuoteDeletes.Add(
+        _postDeletes.Add(db.Posts.Where(w => w.Did == did && w.Rkey == rkey));
+        _posts.Remove(key);
+        _postLikeDeletes.Add(db.PostLikes.Where(w => w.ParentDid == did && w.ParentRkey == rkey));
+        _postLikes.Remove(key);
+        _postQuoteDeletes.Add(
             db.PostQuotePosts.Where(w => w.ParentDid == did && w.ParentRkey == rkey)
         );
-        PostQuotePosts.Remove(key);
-        PostReplyDeletes.Add(db.PostReplies.Where(w => w.ParentDid == did && w.ParentRkey == rkey));
-        PostReplies.Remove(key);
-        PostRepostDeletes.Add(
+        _postQuotePosts.Remove(key);
+        _postReplyDeletes.Add(
+            db.PostReplies.Where(w => w.ParentDid == did && w.ParentRkey == rkey)
+        );
+        _postReplies.Remove(key);
+        _postRepostDeletes.Add(
             db.PostReposts.Where(w => w.ParentDid == did && w.ParentRkey == rkey)
         );
-        PostReposts.Remove(key);
+        _postReposts.Remove(key);
     }
 
     public void Add(PostLike item)
     {
-        PostLikes.TryAdd(item.Ref, item);
+        _postLikes.TryAdd(item.Ref, item);
     }
 
     public void Delete(PostRecordRef key, Func<FeedDbContext, IQueryable<PostLike>> deleteExpr)
     {
-        PostLikeDeletes.Add(deleteExpr(db));
-        PostLikes.Remove(key);
+        _postLikeDeletes.Add(deleteExpr(db));
+        _postLikes.Remove(key);
     }
 
     public void Add(PostRepost item)
     {
-        PostReposts.TryAdd(item.Ref, item);
+        _postReposts.TryAdd(item.Ref, item);
     }
 
     public void Delete(PostRecordRef key, Func<FeedDbContext, IQueryable<PostRepost>> deleteExpr)
     {
-        PostRepostDeletes.Add(deleteExpr(db));
-        PostReposts.Remove(key);
+        _postRepostDeletes.Add(deleteExpr(db));
+        _postReposts.Remove(key);
     }
 
     public int Size =>
-        Posts.Count
-        + PostDeletes.Count
-        + PostLikes.Count
-        + PostLikeDeletes.Count
-        + PostQuotePosts.Count
-        + PostQuoteDeletes.Count
-        + PostReplies.Count
-        + PostReplyDeletes.Count
-        + PostReposts.Count
-        + PostRepostDeletes.Count;
+        _posts.Count
+        + _postDeletes.Count
+        + _postLikes.Count
+        + _postLikeDeletes.Count
+        + _postQuotePosts.Count
+        + _postQuoteDeletes.Count
+        + _postReplies.Count
+        + _postReplyDeletes.Count
+        + _postReposts.Count
+        + _postRepostDeletes.Count;
 
     public async Task<(int, int)> Commit(CancellationToken cancellationToken)
     {
         var startTime = DateTime.Now;
         using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        await db.BulkInsertOrUpdateAsync(Posts.Values, cancellationToken: cancellationToken);
-        await db.BulkInsertOrUpdateAsync(PostLikes.Values, cancellationToken: cancellationToken);
+        await db.BulkInsertOrUpdateAsync(_posts.Values, cancellationToken: cancellationToken);
+        await db.BulkInsertOrUpdateAsync(_postLikes.Values, cancellationToken: cancellationToken);
         await db.BulkInsertOrUpdateAsync(
-            PostQuotePosts.Values,
+            _postQuotePosts.Values,
             cancellationToken: cancellationToken
         );
-        await db.BulkInsertOrUpdateAsync(PostReplies.Values, cancellationToken: cancellationToken);
-        await db.BulkInsertOrUpdateAsync(PostReposts.Values, cancellationToken: cancellationToken);
+        await db.BulkInsertOrUpdateAsync(_postReplies.Values, cancellationToken: cancellationToken);
+        await db.BulkInsertOrUpdateAsync(_postReposts.Values, cancellationToken: cancellationToken);
 
         int deletes = 0;
-        foreach (var req in PostDeletes)
+        foreach (var req in _postDeletes)
         {
             deletes += await req.ExecuteDeleteAsync(cancellationToken);
         }
-        foreach (var req in PostLikeDeletes)
+        foreach (var req in _postLikeDeletes)
         {
             deletes += await req.ExecuteDeleteAsync(cancellationToken);
         }
-        foreach (var req in PostQuoteDeletes)
+        foreach (var req in _postQuoteDeletes)
         {
             deletes += await req.ExecuteDeleteAsync(cancellationToken);
         }
-        foreach (var req in PostReplyDeletes)
+        foreach (var req in _postReplyDeletes)
         {
             deletes += await req.ExecuteDeleteAsync(cancellationToken);
         }
-        foreach (var req in PostRepostDeletes)
+        foreach (var req in _postRepostDeletes)
         {
             deletes += await req.ExecuteDeleteAsync(cancellationToken);
         }
@@ -697,32 +700,32 @@ class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
         await transaction.CommitAsync(cancellationToken);
 
         var upserts =
-            Posts.Count
-            + PostLikes.Count
-            + PostQuotePosts.Count
-            + PostReplies.Count
-            + PostReposts.Count;
+            _posts.Count
+            + _postLikes.Count
+            + _postQuotePosts.Count
+            + _postReplies.Count
+            + _postReposts.Count;
 
         metrics.TrackSave(
             DateTime.Now - startTime,
-            Posts.Count,
-            PostLikes.Count,
-            PostQuotePosts.Count,
-            PostReplies.Count,
-            PostReposts.Count
+            _posts.Count,
+            _postLikes.Count,
+            _postQuotePosts.Count,
+            _postReplies.Count,
+            _postReposts.Count
         );
 
         // Clear after committing the transaction successfully
-        Posts.Clear();
-        PostDeletes.Clear();
-        PostLikes.Clear();
-        PostLikeDeletes.Clear();
-        PostQuotePosts.Clear();
-        PostQuoteDeletes.Clear();
-        PostReplies.Clear();
-        PostReplyDeletes.Clear();
-        PostReposts.Clear();
-        PostRepostDeletes.Clear();
+        _posts.Clear();
+        _postDeletes.Clear();
+        _postLikes.Clear();
+        _postLikeDeletes.Clear();
+        _postQuotePosts.Clear();
+        _postQuoteDeletes.Clear();
+        _postReplies.Clear();
+        _postReplyDeletes.Clear();
+        _postReposts.Clear();
+        _postRepostDeletes.Clear();
 
         db.ChangeTracker.Clear();
 

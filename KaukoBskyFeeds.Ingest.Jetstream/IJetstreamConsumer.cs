@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Threading.Channels;
+using Castle.Core.Internal;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Shared.Bsky;
 using ZstdSharp;
@@ -20,18 +21,18 @@ public interface IJetstreamConsumer
 
 public abstract class BaseJetstreamConsumer : IJetstreamConsumer
 {
-    public static readonly string[] JETSTREAM_URLS =
+    public static readonly string[] JetstreamUrls =
     [
         "wss://jetstream1.us-east.bsky.network",
         "wss://jetstream2.us-east.bsky.network",
         "wss://jetstream1.us-west.bsky.network",
         "wss://jetstream2.us-west.bsky.network",
     ];
-    public static readonly string[] DEFAULT_COLLECTIONS =
+    public static readonly string[] DefaultCollections =
     [
-        BskyConstants.COLLECTION_TYPE_POST,
-        BskyConstants.COLLECTION_TYPE_LIKE,
-        BskyConstants.COLLECTION_TYPE_REPOST,
+        BskyConstants.CollectionTypePost,
+        BskyConstants.CollectionTypeLike,
+        BskyConstants.CollectionTypeRepost,
     ];
     private const int REPLAY_WINDOW_MS = 3000;
 
@@ -78,12 +79,12 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
     {
         var chosenHostUrl =
             hostUrl
-            ?? Random.Shared.GetItems(JETSTREAM_URLS, 1).FirstOrDefault()
-            ?? JETSTREAM_URLS[0];
+            ?? Random.Shared.GetItems(JetstreamUrls, 1).FirstOrDefault()
+            ?? JetstreamUrls[0];
         long? cursor = getCursor == null ? null : await getCursor(cancellationToken);
 
         // require an actually empty list to send nothing
-        wantedCollections ??= DEFAULT_COLLECTIONS;
+        var wantedCollectionsList = (wantedCollections ?? DefaultCollections).ToList();
 
         var querySegments = new List<KeyValuePair<string, string>>();
         if (cursor != null && cursor >= 0)
@@ -92,14 +93,14 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
             replayCursor = Math.Max(replayCursor, 0);
 
             var cursorStr = replayCursor.ToString();
-            if (cursorStr != null)
+            if (!cursorStr.IsNullOrEmpty())
             {
                 querySegments.Add(new KeyValuePair<string, string>("cursor", cursorStr));
             }
         }
-        if (wantedCollections?.Any() ?? false)
+        if (wantedCollectionsList.Count > 0)
         {
-            foreach (var coll in wantedCollections)
+            foreach (var coll in wantedCollectionsList)
             {
                 querySegments.Add(new KeyValuePair<string, string>("wantedCollections", coll));
             }

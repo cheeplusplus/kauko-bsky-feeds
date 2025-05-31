@@ -1,5 +1,4 @@
 using FishyFlip.Lexicon.App.Bsky.Feed;
-using FishyFlip.Models;
 
 namespace KaukoBskyFeeds.Shared.Bsky;
 

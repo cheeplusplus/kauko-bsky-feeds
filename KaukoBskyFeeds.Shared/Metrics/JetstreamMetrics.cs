@@ -4,7 +4,7 @@ namespace KaukoBskyFeeds.Shared.Metrics;
 
 public class JetstreamMetrics
 {
-    public const string METRIC_METER_NAME = "KaukoBskyFeeds.Ingest.Jetstream";
+    public const string MetricMeterName = "KaukoBskyFeeds.Ingest.Jetstream";
     private readonly Counter<int> _reconnectCounter;
     private readonly Counter<int> _connectionErrorCounter;
     private readonly Counter<int> _eventRawCounter;
@@ -16,51 +16,51 @@ public class JetstreamMetrics
 
     public JetstreamMetrics(IMeterFactory meterFactory)
     {
-        var meter = meterFactory.Create(METRIC_METER_NAME);
+        var meter = meterFactory.Create(MetricMeterName);
         _reconnectCounter = meter.CreateCounter<int>(
-            $"{METRIC_METER_NAME}.connection.reconnect",
+            $"{MetricMeterName}.connection.reconnect",
             description: "Websocket reconnections"
         );
         _connectionErrorCounter = meter.CreateCounter<int>(
-            $"{METRIC_METER_NAME}.connection.error",
+            $"{MetricMeterName}.connection.error",
             description: "Websocket errors"
         );
         _eventRawCounter = meter.CreateCounter<int>("event.raw", description: "Raw events");
         _eventRawErrorCounter = meter.CreateCounter<int>(
-            $"{METRIC_METER_NAME}.event.raw.error",
+            $"{MetricMeterName}.event.raw.error",
             description: "Raw event errors"
         );
         _eventRawSizeCompressedHistogram = meter.CreateHistogram<long>(
-            $"{METRIC_METER_NAME}.event.size.compressed",
+            $"{MetricMeterName}.event.size.compressed",
             description: "Compressed event size",
             unit: "bytes"
         );
         _eventRawSizeUncompressedHistogram = meter.CreateHistogram<long>(
-            $"{METRIC_METER_NAME}.event.size.uncompressed",
+            $"{MetricMeterName}.event.size.uncompressed",
             description: "Uncompressed event size",
             unit: "bytes"
         );
         _eventParsedCounter = meter.CreateCounter<int>(
-            $"{METRIC_METER_NAME}.event.parsed",
+            $"{MetricMeterName}.event.parsed",
             description: "Parsed events"
         );
         _eventParseErrorCounter = meter.CreateCounter<int>(
-            $"{METRIC_METER_NAME}.event.parsed.error",
+            $"{MetricMeterName}.event.parsed.error",
             description: "Event parse errors"
         );
     }
 
     public void WsReconnect(string host)
     {
-        _reconnectCounter.Add(1, new KeyValuePair<string, object?>(Tags.WEBSOCKET_HOST, host));
+        _reconnectCounter.Add(1, new KeyValuePair<string, object?>(Tags.WebsocketHost, host));
     }
 
     public void WsError(string host, string errorClass)
     {
         _connectionErrorCounter.Add(
             1,
-            new KeyValuePair<string, object?>(Tags.WEBSOCKET_HOST, host),
-            new KeyValuePair<string, object?>(Tags.ERROR_CLASS, errorClass)
+            new KeyValuePair<string, object?>(Tags.WebsocketHost, host),
+            new KeyValuePair<string, object?>(Tags.ErrorClass, errorClass)
         );
     }
 
@@ -68,7 +68,7 @@ public class JetstreamMetrics
     {
         _eventRawCounter.Add(1);
         _eventRawSizeUncompressedHistogram.Record(uncompressedSize);
-        if (compressedSize != null && compressedSize.HasValue)
+        if (compressedSize != null)
         {
             _eventRawSizeCompressedHistogram.Record(compressedSize.Value);
         }
@@ -78,7 +78,7 @@ public class JetstreamMetrics
     {
         _eventRawErrorCounter.Add(
             1,
-            new KeyValuePair<string, object?>(Tags.ERROR_CLASS, errorClass)
+            new KeyValuePair<string, object?>(Tags.ErrorClass, errorClass)
         );
     }
 
@@ -86,7 +86,7 @@ public class JetstreamMetrics
     {
         _eventParsedCounter.Add(
             1,
-            new KeyValuePair<string, object?>(Tags.ATPROTO_COLLECTION, collection)
+            new KeyValuePair<string, object?>(Tags.AtprotoCollection, collection)
         );
     }
 
@@ -94,7 +94,7 @@ public class JetstreamMetrics
     {
         _eventParseErrorCounter.Add(
             1,
-            new KeyValuePair<string, object?>(Tags.ERROR_CLASS, errorClass)
+            new KeyValuePair<string, object?>(Tags.ErrorClass, errorClass)
         );
     }
 }

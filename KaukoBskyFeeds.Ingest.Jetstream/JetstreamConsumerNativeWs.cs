@@ -68,7 +68,7 @@ public class JetstreamConsumerNativeWs(
     public override async Task Stop()
     {
         await base.Stop();
-        _cancelSource.Cancel();
+        await _cancelSource.CancelAsync();
     }
 
     private async Task Listen(CancellationToken cancellationToken)

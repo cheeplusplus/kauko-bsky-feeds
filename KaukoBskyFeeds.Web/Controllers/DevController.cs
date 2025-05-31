@@ -1,9 +1,8 @@
-using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using FishyFlip;
 using FishyFlip.Lexicon.App.Bsky.Actor;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
-using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
@@ -22,8 +21,8 @@ public class DevController(
     IConfiguration configuration,
     FeedRegistry feedRegistry,
     FeedDbContext dbContext,
-    ATProtocol _proto
-) : BskyControllerBase(configuration, _proto)
+    ATProtocol proto
+) : BskyControllerBase(configuration, proto)
 {
     private bool DevEndpointsEnabled =>
         env.IsDevelopment() || (BskyConfig.Web?.EnableDevEndpoints ?? false);
@@ -108,17 +107,18 @@ public class DevController(
             .ToListAsync(cancellationToken);
         var totalPostCount = totalPosts.FirstOrDefault();
 
-        static string lat(DateTime? et) =>
+        static string Lat(DateTime? et) =>
             (DateTime.UtcNow - et)?.ToString("d'd 'h'h 'm'm 's's'") ?? "N/A";
-        var postDistance = lat(lastPost?.EventTime);
-        var likeDistance = lat(lastPostLike?.EventTime);
-        var repostDistance = lat(lastPostRepost?.EventTime);
+        var postDistance = Lat(lastPost?.EventTime);
+        var likeDistance = Lat(lastPostLike?.EventTime);
+        var repostDistance = Lat(lastPostRepost?.EventTime);
 
         return TypedResults.Ok(
             new StatusResponse(lastPost, totalPostCount, postDistance, likeDistance, repostDistance)
         );
     }
 
+    [SuppressMessage("ReSharper", "NotAccessedPositionalProperty.Global")]
     public record StatusResponse(
         Db.Models.Post? LatestPost,
         int TotalPosts,
@@ -207,6 +207,7 @@ public class DevController(
         return TypedResults.Json(resp);
     }
 
+    [SuppressMessage("ReSharper", "NotAccessedPositionalProperty.Global")]
     public record CachedPostResponse(string AtUri, IPostRecord Post, long TotalInteractions);
 
     [HttpPost("install")]
@@ -247,7 +248,7 @@ public class DevController(
 
             var recordRefResult = await Proto.Repo.PutRecordAsync(
                 Session.Did,
-                BskyConstants.COLLECTION_TYPE_FEED_GENERATOR,
+                BskyConstants.CollectionTypeFeedGenerator,
                 feed.FeedShortname,
                 record,
                 validate: true,

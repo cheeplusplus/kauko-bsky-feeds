@@ -7,10 +7,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace KaukoBskyFeeds.Web.Controllers;
 
-public abstract class BskyControllerBase(IConfiguration configuration, ATProtocol _proto)
+public abstract class BskyControllerBase(IConfiguration configuration, ATProtocol proto)
     : ControllerBase
 {
-    protected ATProtocol Proto { get; private set; } = _proto;
+    protected ATProtocol Proto { get; private set; } = proto;
 
     protected readonly BskyConfigBlock BskyConfig =
         configuration.GetSection("BskyConfig").Get<BskyConfigBlock>()
@@ -34,7 +34,7 @@ public abstract class BskyControllerBase(IConfiguration configuration, ATProtoco
         }
     }
 
-    protected void AddRequestTag(string tag, string value)
+    private void AddRequestTag(string tag, string value)
     {
         var tagsFeature = HttpContext.Features.Get<IHttpMetricsTagsFeature>();
         tagsFeature?.Tags.Add(new KeyValuePair<string, object?>(tag, value));
@@ -42,6 +42,6 @@ public abstract class BskyControllerBase(IConfiguration configuration, ATProtoco
 
     protected void AddFeedTag(string feedUri)
     {
-        this.AddRequestTag(Tags.ATPROTO_FEED_NAME, Path.GetFileName(feedUri));
+        this.AddRequestTag(Tags.AtprotoFeedName, Path.GetFileName(feedUri));
     }
 }

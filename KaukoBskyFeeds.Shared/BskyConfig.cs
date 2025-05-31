@@ -48,9 +48,8 @@ public static class BskyConfigExtensions
             throw new Exception("Couldn't find " + rootFile);
         }
 
-        var dbDir = Path.Join(configDir, "data");
-        return new DataDirInfo(bskyConfigPath, dbDir);
+        return new DataDirInfo(bskyConfigPath);
     }
 
-    public record DataDirInfo(string ConfigPath, string DbDir);
+    public record DataDirInfo(string ConfigPath);
 }

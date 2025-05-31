@@ -19,7 +19,9 @@ public static class BskyAuth
     /// Get the DID from the server-to-server auth header. Does NOT validate signatures!
     /// </summary>
     /// <param name="authorization">Authorization header value</param>
+    /// <param name="expectedLxm"></param>
     /// <param name="expectedAudience">Assert an audience</param>
+    /// <param name="checkValidTo">Check date validity</param>
     /// <returns>ATDid of issuer</returns>
     public static ATDid? GetDidFromAuthHeader(
         string? authorization,

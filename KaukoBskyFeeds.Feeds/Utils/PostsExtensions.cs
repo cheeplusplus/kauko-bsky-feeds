@@ -56,9 +56,9 @@ public static class PostExtensions
         return post switch
         {
             Post or PostQuotePost or PostReply or PostWithInteractions =>
-                BskyConstants.COLLECTION_TYPE_POST,
-            PostLike => BskyConstants.COLLECTION_TYPE_LIKE,
-            PostRepost => BskyConstants.COLLECTION_TYPE_REPOST,
+                BskyConstants.CollectionTypePost,
+            PostLike => BskyConstants.CollectionTypeLike,
+            PostRepost => BskyConstants.CollectionTypeRepost,
             _ => "?",
         };
     }
@@ -85,7 +85,7 @@ public static class PostExtensions
 
     public static string ToParentPostUri(this IPostInteraction repost)
     {
-        return $"at://{repost.ParentRef.Did}/{BskyConstants.COLLECTION_TYPE_POST}/{repost.ParentRef.Rkey}";
+        return $"at://{repost.ParentRef.Did}/{BskyConstants.CollectionTypePost}/{repost.ParentRef.Rkey}";
     }
 
     public static ATUri ToParentPostAtUri(this IPostInteraction repost)

@@ -27,8 +27,6 @@ public class TimelineMinusList(
     FeedInstanceMetadata feedMeta
 ) : IFeed
 {
-    private readonly ATDidComparer _atDidComparer = new();
-
     public BaseFeedConfig Config => feedConfig;
 
     public async Task<CustomSkeletonFeed> GetFeedSkeleton(
@@ -43,7 +41,9 @@ public class TimelineMinusList(
             throw new NotLoggedInException();
         }
 
-        var followingList = await bsCache.GetFollowing(proto, proto.Session.Did, cancellationToken);
+        var followingList = (
+            await bsCache.GetFollowing(proto, proto.Session.Did, cancellationToken)
+        ).ToList();
         var followingListStr = followingList.Select(s => s.Handler);
         var mutualsDids = await GetMutuals(cancellationToken);
         var listMemberDids = await bsCache.GetListMembers(
@@ -66,7 +66,7 @@ public class TimelineMinusList(
             }
         }
 
-        listMemberDids = listMemberDids.Distinct().ToList();
+        var listMemberDidsList = listMemberDids.Distinct().ToList();
 
         List<Post> posts;
         string? newCursor = null;
@@ -86,22 +86,21 @@ public class TimelineMinusList(
         }
         else
         {
-            posts =
-                await mCache.GetOrCreateAsync(
-                    $"feed_db_{feedMeta.FeedUri}|{cursor}",
-                    async (_) =>
-                    {
-                        return await db
-                            .Posts.LatestFromCursor(cursor)
-                            .Where(w => followingListStr.Contains(w.Did))
-                            // use a large limit - assume we need to fetch more than we're going to show
-                            .Take(100)
-                            .ToListAsync(cancellationToken);
-                    },
-                    BskyCache.QuickOpts,
-                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
-                    cancellationToken: cancellationToken
-                ) ?? [];
+            posts = await mCache.GetOrCreateAsync(
+                $"feed_db_{feedMeta.FeedUri}|{cursor}",
+                async (_) =>
+                {
+                    return await db
+                        .Posts.LatestFromCursor(cursor)
+                        .Where(w => followingListStr.Contains(w.Did))
+                        // use a large limit - assume we need to fetch more than we're going to show
+                        .Take(100)
+                        .ToListAsync(cancellationToken);
+                },
+                BskyCache.QuickOpts,
+                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                cancellationToken: cancellationToken
+            );
         }
 
         if (posts.Count < 1 || cancellationToken.IsCancellationRequested)
@@ -118,10 +117,9 @@ public class TimelineMinusList(
                 judgement = JudgePost(
                     s,
                     requestor ?? proto.Session.Did,
-                    feedConfig,
                     followingList,
                     mutualsDids,
-                    listMemberDids
+                    listMemberDidsList
                 );
             }
             catch (Exception ex)
@@ -178,7 +176,7 @@ public class TimelineMinusList(
         return new CustomSkeletonFeed(feedOutput, newCursor);
     }
 
-    private async Task<IEnumerable<ATDid>> GetMutuals(CancellationToken cancellationToken = default)
+    private async Task<List<ATDid>> GetMutuals(CancellationToken cancellationToken = default)
     {
         if (proto.Session == null)
         {
@@ -201,34 +199,33 @@ public class TimelineMinusList(
     private PostJudgement JudgePost(
         Post post,
         ATDid requestorDid,
-        TimelineMinusListFeedConfig feedConfig,
-        IEnumerable<ATDid> followingDids,
-        IEnumerable<ATDid> mutualsDids,
-        IEnumerable<ATDid> listMemberDids
+        List<ATDid> followingDids,
+        List<ATDid> mutualsDids,
+        List<ATDid> listMemberDids
     )
     {
-        bool isFollowing(ATDid? did) => did != null && followingDids.Contains(did, _atDidComparer);
-        bool isMutual(ATDid? did) => did != null && mutualsDids.Contains(did, _atDidComparer);
-        bool isInList(ATDid? did) => did != null && listMemberDids.Contains(did, _atDidComparer);
+        bool IsFollowing(ATDid? did) => did != null && followingDids.Contains(did);
+        bool IsMutual(ATDid? did) => did != null && mutualsDids.Contains(did);
+        bool IsInList(ATDid? did) => did != null && listMemberDids.Contains(did);
 
-        bool isMuted(ATDid? did) =>
+        bool IsMuted(ATDid? did) =>
             did != null && (feedConfig.MuteUsers?.Contains(did.Handler) ?? false);
 
         // A user is visible if: we are following them, and they are: not in the list | a mutual | always shown
         // This check should only be used in cases where we care if we're following the person
-        bool isVisible(ATDid? did) =>
+        bool IsVisible(ATDid? did) =>
             did != null
-            && isFollowing(did)
+            && IsFollowing(did)
             && (
-                !isInList(did)
-                || isMutual(did)
+                !IsInList(did)
+                || IsMutual(did)
                 || (feedConfig.AlwaysShowListUser?.Contains(did.Handler) ?? true)
             );
 
         var postAuthor = post.GetAuthorDid();
 
         // Self post
-        if (feedConfig.ShowSelfPosts && _atDidComparer.Equals(postAuthor, requestorDid))
+        if (feedConfig.ShowSelfPosts && postAuthor.Equals(requestorDid))
         {
             return new PostJudgement(PostType.SelfPost, true);
         }
@@ -270,16 +267,16 @@ public class TimelineMinusList(
             )
             {
                 if (
-                    isVisible(replyParentDid)
+                    IsVisible(replyParentDid)
                     && (
                         feedConfig.ShowReplies == ShowRepliesSetting.FollowingOnlyTail
-                        || isVisible(replyRootDid)
+                        || IsVisible(replyRootDid)
                     )
                 )
                 {
                     return new PostJudgement(
                         PostType.Reply,
-                        !isMuted(replyParentDid) && !isMuted(replyRootDid)
+                        !IsMuted(replyParentDid) && !IsMuted(replyRootDid)
                     );
                 }
             }
@@ -298,9 +295,9 @@ public class TimelineMinusList(
             }
             else if (feedConfig.ShowQuotePosts == ShowQuotePostsSetting.FollowingOnly)
             {
-                if (isVisible(embedRecordDid))
+                if (IsVisible(embedRecordDid))
                 {
-                    return new PostJudgement(PostType.QuotePost, !isMuted(embedRecordDid));
+                    return new PostJudgement(PostType.QuotePost, !IsMuted(embedRecordDid));
                 }
             }
 
@@ -308,22 +305,22 @@ public class TimelineMinusList(
         }
 
         // Target list
-        if (isInList(postAuthor))
+        if (IsInList(postAuthor))
         {
             if (feedConfig.AlwaysShowListUser?.Contains(post.Did) ?? false)
             {
-                return new PostJudgement(PostType.InListAlwaysShow, !isMuted(postAuthor));
+                return new PostJudgement(PostType.InListAlwaysShow, !IsMuted(postAuthor));
             }
-            else if (feedConfig.IncludeListMutuals && isMutual(postAuthor))
+            else if (feedConfig.IncludeListMutuals && IsMutual(postAuthor))
             {
-                return new PostJudgement(PostType.InListMutual, !isMuted(postAuthor));
+                return new PostJudgement(PostType.InListMutual, !IsMuted(postAuthor));
             }
 
             return new PostJudgement(PostType.InList, false);
         }
 
         // Default to showing
-        return new PostJudgement(PostType.Normal, !isMuted(postAuthor));
+        return new PostJudgement(PostType.Normal, !IsMuted(postAuthor));
     }
 
     private record PostJudgement(
@@ -337,7 +334,6 @@ public class TimelineMinusList(
     private enum PostType
     {
         SelfPost,
-        Muted,
         Repost,
         Reply,
         QuotePost,
@@ -345,7 +341,6 @@ public class TimelineMinusList(
         InListAlwaysShow,
         InListMutual,
         Normal,
-        ContextDeleted,
         ErrorState,
     }
 }

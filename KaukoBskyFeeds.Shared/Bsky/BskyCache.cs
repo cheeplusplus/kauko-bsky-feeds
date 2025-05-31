@@ -2,7 +2,6 @@ using FishyFlip;
 using FishyFlip.Lexicon.App.Bsky.Actor;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
-using FishyFlip.Tools;
 using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
@@ -30,6 +29,12 @@ public interface IBskyCache
     );
 
     Task<IEnumerable<ATDid>> GetFollowers(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    );
+
+    Task<IEnumerable<ATDid>> GetMutuals(
         ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
@@ -122,9 +127,11 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
             throw new NotLoggedInException();
         }
 
+        var postUriList = postUris.ToList();
+
         // fetch all available cached entries first
         var allPosts = new Dictionary<ATUri, GetPostsDict>();
-        foreach (var uri in postUris)
+        foreach (var uri in postUriList)
         {
             allPosts[uri] = new GetPostsDict(
                 uri,
@@ -161,7 +168,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
             }
         }
 
-        return postUris.Select(s => allPosts[s].Post);
+        return postUriList.Select(s => allPosts[s].Post);
     }
 
     public async Task<IEnumerable<ATDid>> GetFollowing(
@@ -176,30 +183,30 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
         }
 
         return await cache.GetOrCreateAsync(
-                $"user_{user}_following",
-                async (ct) =>
-                {
-                    logger.LogDebug("Fetching user {listUri} following", user);
-                    return await BskyExtensions.GetAllResults(
-                        async (cursor, ict) =>
-                        {
-                            var r = await proto
-                                .Graph.GetFollowsAsync(
-                                    proto.Session.Handle,
-                                    cursor: cursor,
-                                    cancellationToken: ict
-                                )
-                                .Record(bskyMetrics, "app.bsky.graph.getFollows");
-                            var d = r.HandleResult();
-                            return (d?.Follows.Select(s => s.Did), d?.Cursor);
-                        },
-                        ct
-                    );
-                },
-                DefaultOpts,
-                tags: ["user", $"user/{user}"],
-                cancellationToken: cancellationToken
-            ) ?? [];
+            $"user_{user}_following",
+            async (ct) =>
+            {
+                logger.LogDebug("Fetching user {listUri} following", user);
+                return await BskyExtensions.GetAllResults(
+                    async (cursor, ict) =>
+                    {
+                        var r = await proto
+                            .Graph.GetFollowsAsync(
+                                proto.Session.Handle,
+                                cursor: cursor,
+                                cancellationToken: ict
+                            )
+                            .Record(bskyMetrics, "app.bsky.graph.getFollows");
+                        var d = r.HandleResult();
+                        return (d?.Follows.Select(s => s.Did), d?.Cursor);
+                    },
+                    ct
+                );
+            },
+            DefaultOpts,
+            tags: ["user", $"user/{user}"],
+            cancellationToken: cancellationToken
+        );
     }
 
     public async Task<IEnumerable<ATDid>> GetFollowers(
@@ -214,32 +221,50 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
         }
 
         return await cache.GetOrCreateAsync(
-                $"user_{user}_followers",
-                async (ct) =>
-                {
-                    logger.LogDebug("Fetching user {listUri} followers", user);
-                    return (
-                        await BskyExtensions.GetAllResults(
-                            async (cursor, ict) =>
-                            {
-                                var r = await proto
-                                    .Graph.GetFollowersAsync(
-                                        proto.Session.Handle,
-                                        cursor: cursor,
-                                        cancellationToken: ict
-                                    )
-                                    .Record(bskyMetrics, "app.bsky.graph.getFollowers");
-                                var d = r.HandleResult();
-                                return (d?.Followers.Select(s => s.Did), d?.Cursor);
-                            },
-                            ct
-                        )
-                    );
-                },
-                DefaultOpts,
-                tags: ["user", $"user/{user}", $"user/{user}/followers"],
-                cancellationToken: cancellationToken
-            ) ?? [];
+            $"user_{user}_followers",
+            async (ct) =>
+            {
+                logger.LogDebug("Fetching user {listUri} followers", user);
+                return (
+                    await BskyExtensions.GetAllResults(
+                        async (cursor, ict) =>
+                        {
+                            var r = await proto
+                                .Graph.GetFollowersAsync(
+                                    proto.Session.Handle,
+                                    cursor: cursor,
+                                    cancellationToken: ict
+                                )
+                                .Record(bskyMetrics, "app.bsky.graph.getFollowers");
+                            var d = r.HandleResult();
+                            return (d?.Followers.Select(s => s.Did), d?.Cursor);
+                        },
+                        ct
+                    )
+                );
+            },
+            DefaultOpts,
+            tags: ["user", $"user/{user}", $"user/{user}/followers"],
+            cancellationToken: cancellationToken
+        );
+    }
+
+    public async Task<IEnumerable<ATDid>> GetMutuals(
+        ATProtocol proto,
+        ATDid user,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var followingList = await GetFollowing(proto, user, cancellationToken);
+        var followersList = await GetFollowers(proto, user, cancellationToken);
+
+        return followingList
+            .Select(s => s.Handler)
+            .Intersect(followersList.Select(s => s.Handler))
+            .Select(ATDid.Create)
+            .Where(w => w != null)
+            .Cast<ATDid>()
+            .ToList();
     }
 
     public async Task<IEnumerable<ATDid>> GetListMembers(
@@ -254,26 +279,26 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
         }
 
         return await cache.GetOrCreateAsync(
-                $"list_{listUri}_members",
-                async (ct) =>
-                {
-                    logger.LogDebug("Fetching list {listUri} members list", listUri);
-                    return await BskyExtensions.GetAllResults(
-                        async (cursor, ict) =>
-                        {
-                            var r = await proto
-                                .Graph.GetListAsync(listUri, cursor: cursor, cancellationToken: ict)
-                                .Record(bskyMetrics, "app.bsky.graph.getList");
-                            var d = r.HandleResult();
-                            return (d?.Items.Select(s => s.Subject.Did), d?.Cursor);
-                        },
-                        ct
-                    );
-                },
-                DefaultOpts,
-                tags: ["list", $"{listUri}", $"user/{listUri.Did}"],
-                cancellationToken: cancellationToken
-            ) ?? [];
+            $"list_{listUri}_members",
+            async (ct) =>
+            {
+                logger.LogDebug("Fetching list {listUri} members list", listUri);
+                return await BskyExtensions.GetAllResults(
+                    async (cursor, ict) =>
+                    {
+                        var r = await proto
+                            .Graph.GetListAsync(listUri, cursor: cursor, cancellationToken: ict)
+                            .Record(bskyMetrics, "app.bsky.graph.getList");
+                        var d = r.HandleResult();
+                        return (d?.Items.Select(s => s.Subject.Did), d?.Cursor);
+                    },
+                    ct
+                );
+            },
+            DefaultOpts,
+            tags: ["list", $"{listUri}", $"user/{listUri.Did}"],
+            cancellationToken: cancellationToken
+        );
     }
 
     public async Task<ProfileViewDetailed?> GetProfile(
@@ -381,7 +406,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                     var r = await proto
                         .Repo.ListRecordsAsync(
                             user,
-                            BskyConstants.COLLECTION_TYPE_LIKE,
+                            BskyConstants.CollectionTypeLike,
                             cancellationToken: ct
                         )
                         .Record(bskyMetrics, "com.atproto.repo.listRecords");

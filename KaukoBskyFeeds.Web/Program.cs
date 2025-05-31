@@ -23,9 +23,9 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
     var connStr = builder.Configuration.GetConnectionString("psqldb");
     options.UseNpgsql(
         connStr,
-        options =>
+        opts =>
         {
-            options.CommandTimeout(60);
+            opts.CommandTimeout(60);
         }
     );
 });
@@ -36,15 +36,14 @@ builder.Services.AddHealthChecks();
 builder.Services.AddSingleton<BskyMetrics>();
 builder
     .Services.AddOpenTelemetry()
-    .WithMetrics(builder =>
-        builder
-            .AddPrometheusExporter()
+    .WithMetrics(opts =>
+        opts.AddPrometheusExporter()
             .AddMeter(
                 "System.Net.Http",
                 "System.Runtime",
                 "Microsoft.EntityFrameworkCore",
                 "Microsoft.Extensions.Diagnostics.HealthChecks",
-                BskyMetrics.METRIC_METER_NAME
+                BskyMetrics.MetricMeterName
             )
             .AddAspNetCoreInstrumentation()
     );
@@ -63,7 +62,7 @@ if (bskyConfig != null)
         () =>
             new Dictionary<string, dynamic>
             {
-                { "@context", new string[] { "https://www.w3.org/ns/did/v1" } },
+                { "@context", new[] { "https://www.w3.org/ns/did/v1" } },
                 { "id", bskyConfig.Identity.ServiceDid },
                 {
                     "service",

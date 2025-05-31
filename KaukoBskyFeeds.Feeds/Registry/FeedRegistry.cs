@@ -1,5 +1,4 @@
 using System.Reflection;
-using FishyFlip;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
@@ -10,19 +9,17 @@ namespace KaukoBskyFeeds.Feeds.Registry;
 
 public class FeedRegistry
 {
-    private readonly IConfigurationSection _bskyConfigSection;
-    private readonly Dictionary<string, (Type, Type)> _feedTypes;
     private readonly List<RegisteredFeed> _feeds;
 
     public FeedRegistry(IConfiguration configuration)
     {
-        _bskyConfigSection = configuration.GetRequiredSection("BskyConfig");
+        var bskyConfigSection = configuration.GetRequiredSection("BskyConfig");
         var bskyConfig =
-            _bskyConfigSection.Get<BskyConfigBlock>()
+            bskyConfigSection.Get<BskyConfigBlock>()
             ?? throw new Exception("Missing configuration");
 
         // Collect all feed classes from the assembly
-        _feedTypes = this.GetType()
+        Dictionary<string, (Type, Type)> feedTypes = this.GetType()
             .Assembly.GetTypes()
             .Select(s => new { CType = s, CAttr = s.GetCustomAttribute<BskyFeedAttribute>() })
             .Where(w => w.CAttr != null)
@@ -32,14 +29,14 @@ public class FeedRegistry
         _feeds = bskyConfig
             .FeedProcessors.Select(feedCfg => new RegisteredFeed(
                 feedCfg.Value.Type,
-                _feedTypes[feedCfg.Value.Type].Item1,
-                _bskyConfigSection
+                feedTypes[feedCfg.Value.Type].Item1,
+                bskyConfigSection
                     .GetRequiredSection($"FeedProcessors:{feedCfg.Key}:Config")
-                    .Get(_feedTypes[feedCfg.Value.Type].Item2)
+                    .Get(feedTypes[feedCfg.Value.Type].Item2)
                     ?? throw new Exception("Failed to parse feed configuration of " + feedCfg.Key),
                 feedCfg.Value.Config,
                 feedCfg.Key,
-                $"{bskyConfig.Identity.PublishedAtUri}/{BskyConstants.COLLECTION_TYPE_FEED_GENERATOR}/{feedCfg.Key}"
+                $"{bskyConfig.Identity.PublishedAtUri}/{BskyConstants.CollectionTypeFeedGenerator}/{feedCfg.Key}"
             ))
             .ToList();
     }

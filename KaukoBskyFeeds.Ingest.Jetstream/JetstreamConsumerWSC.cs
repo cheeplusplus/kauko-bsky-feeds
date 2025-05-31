@@ -25,13 +25,13 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger, Jetstrea
         CancellationToken cancellationToken = default
     )
     {
-        Task<Uri> doGetWsUri() =>
+        Task<Uri> DoGetWsUri() =>
             GetWsUri(
                 getCursor: getCursor,
                 wantedCollections: wantedCollections,
                 cancellationToken: cancellationToken
             );
-        var wsUri = await doGetWsUri();
+        var wsUri = await DoGetWsUri();
         logger.LogInformation("Connecting to Jetstream with URI {uri}", wsUri);
 
         var factory = new Func<ClientWebSocket>(() =>
@@ -61,31 +61,33 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger, Jetstrea
         });
         _disposers.Add(reconnSubscription);
 
-        var disconSubscription = _wsClient.DisconnectionHappened.Subscribe(async info =>
-        {
-            if (info.Exception != null)
+        var disconSubscription = _wsClient.DisconnectionHappened.Subscribe(
+            async void (info) =>
             {
-                logger.LogError(info.Exception, "Got exception inside Websocket");
-                metrics.WsError(_wsClient.Url.Host, info.Exception.GetType().Name);
-            }
+                if (info.Exception != null)
+                {
+                    logger.LogError(info.Exception, "Got exception inside Websocket");
+                    metrics.WsError(_wsClient.Url.Host, info.Exception.GetType().Name);
+                }
 
-            logger.LogInformation(
-                "Disconnection happened, type: {type}, status: {closeStatus}, description: {closeDescription}",
-                info.Type,
-                info.CloseStatus,
-                info.CloseStatusDescription
-            );
+                logger.LogInformation(
+                    "Disconnection happened, type: {type}, status: {closeStatus}, description: {closeDescription}",
+                    info.Type,
+                    info.CloseStatus,
+                    info.CloseStatusDescription
+                );
 
-            // Update the cursor URI so we restart at the right point, as long as we didn't intentionally disconnect
-            if (
-                info.Type != DisconnectionType.ByUser
-                && info.CloseStatus != WebSocketCloseStatus.NormalClosure
-            )
-            {
-                _wsClient.Url = await doGetWsUri();
-                logger.LogDebug("Switching Jetstream URI to {uri}", _wsClient.Url);
+                // Update the cursor URI so we restart at the right point, as long as we didn't intentionally disconnect
+                if (
+                    info.Type != DisconnectionType.ByUser
+                    && info.CloseStatus != WebSocketCloseStatus.NormalClosure
+                )
+                {
+                    _wsClient.Url = await DoGetWsUri();
+                    logger.LogDebug("Switching Jetstream URI to {uri}", _wsClient.Url);
+                }
             }
-        });
+        );
         _disposers.Add(disconSubscription);
 
         var messageSubscription = _wsClient.MessageReceived.SubscribeAsync(OnMessageReceived);
@@ -164,7 +166,7 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger, Jetstrea
         }
         catch (ChannelClosedException)
         {
-            return;
+            // Do nothing
         }
         catch (Exception ex)
         {

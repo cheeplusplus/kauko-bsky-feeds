@@ -4,11 +4,11 @@ using KaukoBskyFeeds.Shared.Bsky;
 namespace KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 
 [JsonPolymorphic(IgnoreUnrecognizedTypeDiscriminators = true)]
-[JsonDerivedType(typeof(AppBskyFeedPostEmbedImages), BskyConstants.POST_EMBED_TYPE_IMAGES)]
-[JsonDerivedType(typeof(AppBskyFeedPostEmbedRecord), BskyConstants.POST_EMBED_TYPE_RECORD)]
+[JsonDerivedType(typeof(AppBskyFeedPostEmbedImages), BskyConstants.PostEmbedTypeImages)]
+[JsonDerivedType(typeof(AppBskyFeedPostEmbedRecord), BskyConstants.PostEmbedTypeRecord)]
 [JsonDerivedType(
     typeof(AppBskyFeedPostEmbedRecordWithMedia),
-    BskyConstants.POST_EMBED_TYPE_RECORD_WITH_MEDIA
+    BskyConstants.PostEmbedTypeRecordWithMedia
 )]
 public class AppBskyFeedPostEmbed
 {
@@ -16,10 +16,9 @@ public class AppBskyFeedPostEmbed
     {
         return this switch
         {
-            AppBskyFeedPostEmbedImages ei => BskyConstants.POST_EMBED_TYPE_IMAGES,
-            AppBskyFeedPostEmbedRecord er => BskyConstants.POST_EMBED_TYPE_RECORD,
-            AppBskyFeedPostEmbedRecordWithMedia rwm =>
-                BskyConstants.POST_EMBED_TYPE_RECORD_WITH_MEDIA,
+            AppBskyFeedPostEmbedImages => BskyConstants.PostEmbedTypeImages,
+            AppBskyFeedPostEmbedRecord => BskyConstants.PostEmbedTypeRecord,
+            AppBskyFeedPostEmbedRecordWithMedia => BskyConstants.PostEmbedTypeRecordWithMedia,
             _ => "other",
         };
     }

@@ -18,19 +18,21 @@ public static class IngestExtensions
         {
             Did = post.Did,
             Rkey = post.Commit.RecordKey,
-            EventTime = post.MessageTime.AsUTC(),
+            EventTime = post.MessageTime.AsUtc(),
             EventTimeUs = post.TimeMicroseconds,
-            CreatedAt = record.CreatedAt.AsUTC(),
+            CreatedAt = record.CreatedAt.AsUtc(),
             Langs = record.Langs,
             Text = record.Text.Replace("\0", string.Empty),
-            ReplyParentUri = record.Reply?.Parent?.Uri,
-            ReplyRootUri = record.Reply?.Root?.Uri,
+            ReplyParentUri = record.Reply?.Parent.Uri,
+            ReplyRootUri = record.Reply?.Root.Uri,
             EmbedType = record.Embed?.GetRecordType(),
             ImageCount = record.Embed is AppBskyFeedPostEmbedImages emb ? emb.Images.Count : 0,
-            EmbedRecordUri =
-                record.Embed is AppBskyFeedPostEmbedRecord rec ? rec.Record.Uri
-                : record.Embed is AppBskyFeedPostEmbedRecordWithMedia recm ? recm.Record?.Uri
-                : null,
+            EmbedRecordUri = record.Embed switch
+            {
+                AppBskyFeedPostEmbedRecord rec => rec.Record.Uri,
+                AppBskyFeedPostEmbedRecordWithMedia recm => recm.Record?.Uri,
+                _ => null,
+            },
         };
     }
 
@@ -41,7 +43,7 @@ public static class IngestExtensions
             return null;
         }
 
-        var (subjectDid, subjectRkey) = GetPairFromATUri(like.Subject.Uri);
+        var (subjectDid, subjectRkey) = GetPairFromAtUri(like.Subject.Uri);
         if (subjectDid == null || subjectRkey == null)
         {
             return null;
@@ -53,7 +55,7 @@ public static class IngestExtensions
             LikeRkey = message.Commit.RecordKey,
             ParentDid = subjectDid,
             ParentRkey = subjectRkey,
-            EventTime = message.MessageTime.AsUTC(),
+            EventTime = message.MessageTime.AsUtc(),
             EventTimeUs = message.TimeMicroseconds,
         };
     }
@@ -75,7 +77,7 @@ public static class IngestExtensions
             return null;
         }
 
-        var (subjectDid, subjectRkey) = GetPairFromATUri(recordUri);
+        var (subjectDid, subjectRkey) = GetPairFromAtUri(recordUri);
         if (subjectDid == null || subjectRkey == null)
         {
             return null;
@@ -87,7 +89,7 @@ public static class IngestExtensions
             QuoteRkey = message.Commit.RecordKey,
             ParentDid = subjectDid,
             ParentRkey = subjectRkey,
-            EventTime = message.MessageTime.AsUTC(),
+            EventTime = message.MessageTime.AsUtc(),
             EventTimeUs = message.TimeMicroseconds,
         };
     }
@@ -99,7 +101,7 @@ public static class IngestExtensions
             return null;
         }
 
-        var (subjectDid, subjectRkey) = GetPairFromATUri(post.Reply.Parent.Uri);
+        var (subjectDid, subjectRkey) = GetPairFromAtUri(post.Reply.Parent.Uri);
         if (subjectDid == null || subjectRkey == null)
         {
             return null;
@@ -111,7 +113,7 @@ public static class IngestExtensions
             ReplyRkey = message.Commit.RecordKey,
             ParentDid = subjectDid,
             ParentRkey = subjectRkey,
-            EventTime = message.MessageTime.AsUTC(),
+            EventTime = message.MessageTime.AsUtc(),
             EventTimeUs = message.TimeMicroseconds,
         };
     }
@@ -123,7 +125,7 @@ public static class IngestExtensions
             return null;
         }
 
-        var (subjectDid, subjectRkey) = GetPairFromATUri(repost.Subject.Uri);
+        var (subjectDid, subjectRkey) = GetPairFromAtUri(repost.Subject.Uri);
         if (subjectDid == null || subjectRkey == null)
         {
             return null;
@@ -135,7 +137,7 @@ public static class IngestExtensions
             RepostRkey = message.Commit.RecordKey,
             ParentDid = subjectDid,
             ParentRkey = subjectRkey,
-            EventTime = message.MessageTime.AsUTC(),
+            EventTime = message.MessageTime.AsUtc(),
             EventTimeUs = message.TimeMicroseconds,
         };
     }
@@ -147,7 +149,7 @@ public static class IngestExtensions
             return null;
         }
 
-        var (subjectDid, subjectRkey) = GetPairFromATUri(fws.Subject.Uri);
+        var (subjectDid, subjectRkey) = GetPairFromAtUri(fws.Subject.Uri);
         if (subjectDid == null || subjectRkey == null)
         {
             return null;
@@ -156,7 +158,7 @@ public static class IngestExtensions
         return subjectDid;
     }
 
-    private static (string?, string?) GetPairFromATUri(string uri)
+    private static (string?, string?) GetPairFromAtUri(string uri)
     {
         var subjectUri = FishyFlip.Models.ATUri.Create(uri);
         var subjectDid = subjectUri.Did?.ToString();

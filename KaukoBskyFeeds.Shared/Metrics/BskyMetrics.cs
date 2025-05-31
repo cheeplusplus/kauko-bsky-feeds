@@ -6,14 +6,14 @@ namespace KaukoBskyFeeds.Shared.Metrics;
 
 public class BskyMetrics
 {
-    public const string METRIC_METER_NAME = "KaukoBskyFeeds.Shared";
+    public const string MetricMeterName = "KaukoBskyFeeds.Shared";
     private readonly Histogram<double> _bskyApiHistogram;
 
     public BskyMetrics(IMeterFactory meterFactory)
     {
-        var meter = meterFactory.Create(METRIC_METER_NAME);
+        var meter = meterFactory.Create(MetricMeterName);
         _bskyApiHistogram = meter.CreateHistogram<double>(
-            $"{METRIC_METER_NAME}.bsky.api",
+            $"{MetricMeterName}.bsky.api",
             description: "API request latency",
             unit: "seconds"
         );
@@ -23,8 +23,8 @@ public class BskyMetrics
     {
         _bskyApiHistogram.Record(
             duration,
-            new KeyValuePair<string, object?>(Tags.ATPROTO_XRPC_PATH, xrpcName),
-            new KeyValuePair<string, object?>(Tags.ATPROTO_XRPC_STATUS, responseStatus)
+            new KeyValuePair<string, object?>(Tags.AtprotoXrpcPath, xrpcName),
+            new KeyValuePair<string, object?>(Tags.AtprotoXrpcStatus, responseStatus)
         );
     }
 }
@@ -48,7 +48,7 @@ public static class BskyMetricsExtensions
         sw.Stop();
         metrics.RecordBskyRequest(
             xrpcName,
-            r.Match(f => 200, f => f.StatusCode),
+            r.Match(_ => 200, f => f.StatusCode),
             sw.Elapsed.TotalSeconds
         );
         return r;

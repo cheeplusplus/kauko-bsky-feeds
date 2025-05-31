@@ -24,8 +24,8 @@ public class BestArt(
     FeedInstanceMetadata feedMeta
 ) : IFeed
 {
-    private int FEED_LIMIT => feedConfig.FeedLimit;
-    private int MIN_INTERACTIONS => feedConfig.MinInteractions;
+    private int FeedLimit => feedConfig.FeedLimit;
+    private int MinInteractions => feedConfig.MinInteractions;
 
     public BaseFeedConfig Config => feedConfig;
 
@@ -50,27 +50,26 @@ public class BestArt(
             postsQuery = postsQuery.Where(w => feedDids.Contains(w.Did));
         }
 
-        var finalPostList =
-            await mCache.GetOrCreateAsync(
-                $"feed_db_{feedMeta.FeedUri}",
-                async (_) =>
-                {
-                    return await postsQuery
-                        .Where(w =>
-                            w.ImageCount > 0
-                            && (w.LikeCount + w.QuotePostCount + w.ReplyCount + w.RepostCount)
-                                >= MIN_INTERACTIONS
-                        )
-                        .OrderByDescending(o =>
-                            o.LikeCount + o.QuotePostCount + o.ReplyCount + o.RepostCount
-                        )
-                        .Take(FEED_LIMIT)
-                        .ToListAsync(cancellationToken);
-                },
-                BskyCache.DefaultOpts,
-                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
-                cancellationToken: cancellationToken
-            ) ?? [];
+        var finalPostList = await mCache.GetOrCreateAsync(
+            $"feed_db_{feedMeta.FeedUri}",
+            async (_) =>
+            {
+                return await postsQuery
+                    .Where(w =>
+                        w.ImageCount > 0
+                        && (w.LikeCount + w.QuotePostCount + w.ReplyCount + w.RepostCount)
+                            >= MinInteractions
+                    )
+                    .OrderByDescending(o =>
+                        o.LikeCount + o.QuotePostCount + o.ReplyCount + o.RepostCount
+                    )
+                    .Take(FeedLimit)
+                    .ToListAsync(cancellationToken);
+            },
+            BskyCache.DefaultOpts,
+            tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+            cancellationToken: cancellationToken
+        );
 
         if (finalPostList.Count < 1)
         {

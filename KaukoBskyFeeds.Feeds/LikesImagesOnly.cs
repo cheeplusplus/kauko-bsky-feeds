@@ -35,6 +35,7 @@ public class LikesImagesOnly(
         {
             throw new NotLoggedInException();
         }
+
         if (requestor == null)
         {
             throw new FeedProhibitedException();
@@ -43,7 +44,7 @@ public class LikesImagesOnly(
         // This only looks at the past 50 likes, which is not ideal
         // TODO: Support cursors and pagination here
         // It'll be kind of complex since not every like has an image so we'll probably want to page ~50 at a time
-        var likesUris = await bsCache.GetLikes(proto, requestor, cancellationToken);
+        var likesUris = (await bsCache.GetLikes(proto, requestor, cancellationToken)).ToList();
 
         List<Db.Models.Post> posts;
         if (feedConfig.FetchTimeline)
@@ -59,22 +60,21 @@ public class LikesImagesOnly(
         else
         {
             var likesSimpleUris = likesUris.Select(s => s.Did + "/" + s.Rkey);
-            var dbPosts =
-                await mCache.GetOrCreateAsync(
-                    $"feed_db_{feedMeta.FeedUri}||{requestor}",
-                    async (_) =>
-                    {
-                        return await db
-                            .Posts.Where(w =>
-                                likesSimpleUris.Contains(w.Did + "/" + w.Rkey) && w.ImageCount > 0
-                            )
-                            .ToListAsync(cancellationToken);
-                    },
-                    // match cache time on GetLikes
-                    BskyCache.DefaultOpts,
-                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
-                    cancellationToken: cancellationToken
-                ) ?? [];
+            var dbPosts = await mCache.GetOrCreateAsync(
+                $"feed_db_{feedMeta.FeedUri}||{requestor}",
+                async (_) =>
+                {
+                    return await db
+                        .Posts.Where(w =>
+                            likesSimpleUris.Contains(w.Did + "/" + w.Rkey) && w.ImageCount > 0
+                        )
+                        .ToListAsync(cancellationToken);
+                },
+                // match cache time on GetLikes
+                BskyCache.DefaultOpts,
+                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                cancellationToken: cancellationToken
+            );
 
             // Put them back in the original order
             posts = likesUris

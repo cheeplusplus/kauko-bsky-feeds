@@ -1,5 +1,4 @@
 ﻿using KaukoBskyFeeds.Db;
-using KaukoBskyFeeds.Ingest;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Workers;
 using KaukoBskyFeeds.Shared;
@@ -26,9 +25,9 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
     var connStr = builder.Configuration.GetConnectionString("psqldb");
     options.UseNpgsql(
         connStr,
-        options =>
+        opts =>
         {
-            options.CommandTimeout(300);
+            opts.CommandTimeout(300);
         }
     );
 
@@ -71,9 +70,9 @@ builder
                 "System.Net.Http",
                 "System.Runtime",
                 "Microsoft.EntityFrameworkCore",
-                BskyMetrics.METRIC_METER_NAME,
-                IngestMetrics.METRIC_METER_NAME,
-                JetstreamMetrics.METRIC_METER_NAME
+                BskyMetrics.MetricMeterName,
+                IngestMetrics.MetricMeterName,
+                JetstreamMetrics.MetricMeterName
             )
     );
 
@@ -86,7 +85,7 @@ if (builder.Configuration.GetValue<bool>("IngestConfig:Verbose"))
     );
 }
 
-IHost host = builder.Build();
+var host = builder.Build();
 
 using (var scope = host.Services.CreateScope())
 {

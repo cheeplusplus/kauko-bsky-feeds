@@ -2,7 +2,6 @@ using System.Linq.Expressions;
 using FishyFlip;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
-using FishyFlip.Tools;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
@@ -45,7 +44,7 @@ public class ListImagesOnly(
             && (w.ReplyParentUri == null || w.ReplyParentUri.StartsWith("at://" + w.Did));
 
         List<Db.Models.Post> posts;
-        string? newCursor = null;
+        string? newCursor;
         if (feedConfig.FetchTimeline)
         {
             var postTlRes = await proto
@@ -62,27 +61,25 @@ public class ListImagesOnly(
         }
         else
         {
-            posts =
-                await mCache.GetOrCreateAsync(
-                    $"feed_db_{feedMeta.FeedUri}|{cursor}",
-                    async (_) =>
-                    {
-                        return await db
-                            .Posts.LatestFromCursor(cursor)
-                            .Where(filter)
-                            // Always take the same amount, postgres is being weird about response time with lower limits
-                            .Take(50)
-                            .ToListAsync(cancellationToken);
-                    },
-                    BskyCache.QuickOpts,
-                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
-                    cancellationToken: cancellationToken
-                ) ?? [];
+            posts = await mCache.GetOrCreateAsync(
+                $"feed_db_{feedMeta.FeedUri}|{cursor}",
+                async (_) =>
+                    await db
+                        .Posts.LatestFromCursor(cursor)
+                        .Where(filter)
+                        // Always take the same amount, postgres is being weird about response time with lower limits
+                        .Take(50)
+                        .ToListAsync(cancellationToken),
+                BskyCache.QuickOpts,
+                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                cancellationToken: cancellationToken
+            );
             if (limit.HasValue)
             {
                 // Limit artificially to keep the database from being weirdly slow
                 posts = posts[..limit.Value];
             }
+
             newCursor = posts.LastOrDefault()?.GetCursor();
         }
 

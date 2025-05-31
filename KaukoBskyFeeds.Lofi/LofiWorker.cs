@@ -1,6 +1,5 @@
 using FishyFlip;
 using FishyFlip.Models;
-using FishyFlip.Tools;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
@@ -27,7 +26,7 @@ public class LofiWorker(
         config.GetSection("LofiConfig").Get<LofiConfig>()
         ?? throw new Exception("Could not read config");
     private readonly CancellationTokenSource _cts = new();
-    private readonly object _printLock = new();
+    private readonly Lock _printLock = new();
     private Session? _session;
     private List<string>? _following;
     private long? _lastCursor;
@@ -58,7 +57,7 @@ public class LofiWorker(
 
         await jsc.Start(
             getCursor: (_) => Task.FromResult(_lastCursor ?? backfillCursor),
-            wantedCollections: [BskyConstants.COLLECTION_TYPE_POST],
+            wantedCollections: [BskyConstants.CollectionTypePost],
             cancellationToken: cancellationToken
         );
 
@@ -98,7 +97,7 @@ public class LofiWorker(
         }
         catch (OperationCanceledException)
         {
-            return;
+            // Do nothing
         }
         catch (Exception ex)
         {
@@ -115,7 +114,7 @@ public class LofiWorker(
             return;
         }
         if (
-            e.Commit.Collection != BskyConstants.COLLECTION_TYPE_POST
+            e.Commit.Collection != BskyConstants.CollectionTypePost
             || e.Commit.Operation != JetstreamOperation.Create
         )
         {
@@ -158,7 +157,7 @@ public class LofiWorker(
             }
         }
 
-        var posts = new string?[] { msg.ToAtUri(), post.Reply?.Parent?.Uri, post.Reply?.Root?.Uri }
+        var posts = new[] { msg.ToAtUri(), post.Reply?.Parent.Uri, post.Reply?.Root.Uri }
             .WhereNotNull()
             .Select(ATUri.Create)
             .WhereNotNull()
@@ -166,18 +165,18 @@ public class LofiWorker(
 
         var hydratedReq = await proto.Feed.GetPostsAsync(posts, _cts.Token);
         var hydrated = hydratedReq.HandleResult();
-        var msgPost = hydrated.Posts.SingleOrDefault(s => s.Uri.ToString() == msg.ToAtUri());
+        var msgPost = hydrated?.Posts.SingleOrDefault(s => s.Uri.ToString() == msg.ToAtUri());
         if (msgPost == null)
         {
             // failed to hydrate
             return;
         }
 
-        var replyParentPost = hydrated.Posts.SingleOrDefault(s =>
-            s.Uri.ToString() == post.Reply?.Parent?.Uri
+        var replyParentPost = hydrated?.Posts.SingleOrDefault(s =>
+            s.Uri.ToString() == post.Reply?.Parent.Uri
         );
-        var replyRootPost = hydrated.Posts.SingleOrDefault(s =>
-            s.Uri.ToString() == post.Reply?.Root?.Uri
+        var replyRootPost = hydrated?.Posts.SingleOrDefault(s =>
+            s.Uri.ToString() == post.Reply?.Root.Uri
         );
 
         var report = new LofiReport(msgPost, replyParentPost, replyRootPost);

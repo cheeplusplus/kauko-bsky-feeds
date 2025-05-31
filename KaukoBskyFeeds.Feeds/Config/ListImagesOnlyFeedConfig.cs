@@ -8,7 +8,5 @@ public record ListImagesOnlyFeedConfig(
     string ListUri,
     bool Install = false,
     bool RestrictToFeedOwner = false,
-    bool FetchTimeline = false,
-    List<string>? AlwaysShowListUser = null,
-    bool ShowSelfPosts = true
+    bool FetchTimeline = false
 ) : BaseFeedConfig(DisplayName, Description, RestrictToFeedOwner, Install);

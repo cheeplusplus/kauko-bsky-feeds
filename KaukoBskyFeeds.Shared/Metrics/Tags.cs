@@ -2,12 +2,12 @@ namespace KaukoBskyFeeds.Shared.Metrics;
 
 public static class Tags
 {
-    public const string WEBSOCKET_HOST = "ws.host";
-    public const string ERROR_CLASS = "error.class";
-    public const string DB_TABLE_NAME = "table.name";
-    public const string ATPROTO_COLLECTION = "atproto.collection";
-    public const string ATPROTO_FEED_NAME = "atproto.feed.name";
-    public const string CACHE_KEY = "cache.key";
-    public const string ATPROTO_XRPC_PATH = "atproto.xrpc.path";
-    public const string ATPROTO_XRPC_STATUS = "atproto.xrpc.status";
+    public const string WebsocketHost = "ws.host";
+    public const string ErrorClass = "error.class";
+    public const string DbTableName = "table.name";
+    public const string AtprotoCollection = "atproto.collection";
+    public const string AtprotoFeedName = "atproto.feed.name";
+    public const string CacheKey = "cache.key";
+    public const string AtprotoXrpcPath = "atproto.xrpc.path";
+    public const string AtprotoXrpcStatus = "atproto.xrpc.status";
 }

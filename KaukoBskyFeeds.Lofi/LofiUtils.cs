@@ -12,7 +12,7 @@ public static class LofiUtils
         return string.Join('\n', mapped);
     }
 
-    public static string TerminalURL(string caption, string url) =>
+    public static string TerminalUrl(string caption, string url) =>
         $"\u001B]8;;{url}\a{caption}\u001B]8;;\a";
 
     public static string AtUriToBskyUrl(ATUri uri, string? handle = null)

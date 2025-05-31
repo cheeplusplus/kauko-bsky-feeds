@@ -1,8 +1,6 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FishyFlip;
-using FishyFlip.Models;
 using FishyFlip.Tools.Json;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
@@ -106,7 +104,7 @@ public static class BskyExtensions
         return list.Where(w => w != null).Cast<T>();
     }
 
-    public static DateTime AsUTC(this DateTime dt)
+    public static DateTime AsUtc(this DateTime dt)
     {
         if (dt.Kind == DateTimeKind.Utc)
         {
@@ -123,20 +121,7 @@ public static class BskyExtensions
 
     public static DateTime FromMicroseconds(long us)
     {
-        return DateTimeOffset.FromUnixTimeMilliseconds(us / 1000).DateTime.AsUTC();
-    }
-}
-
-public class ATDidComparer : IEqualityComparer<ATDid>
-{
-    public bool Equals(ATDid? x, ATDid? y)
-    {
-        return x?.Handler == y?.Handler;
-    }
-
-    public int GetHashCode([DisallowNull] ATDid obj)
-    {
-        return obj.GetHashCode();
+        return DateTimeOffset.FromUnixTimeMilliseconds(us / 1000).DateTime.AsUtc();
     }
 }
 
