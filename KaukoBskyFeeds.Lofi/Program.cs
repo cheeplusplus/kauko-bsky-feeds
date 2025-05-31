@@ -2,6 +2,7 @@
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Lofi;
 using KaukoBskyFeeds.Shared.Bsky;
+using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -21,10 +22,12 @@ builder.Services.AddSingleton(f =>
 
 // builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();
-builder.Services.AddMemoryCache();
+builder.Services.AddHybridCache();
 builder.Services.AddSingleton<BskyCache>();
+builder.Services.AddSingleton<BskyMetrics>();
+builder.Services.AddSingleton<JetstreamMetrics>();
 builder.Services.AddHostedService<LofiWorker>();
 
-IHost host = builder.Build();
+var host = builder.Build();
 
 host.Run();
