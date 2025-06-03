@@ -112,6 +112,9 @@
                             },
                             {
                                 "$ref": "#/definitions/FeedProcessorPopularAmong"
+                            },
+                            {
+                                "$ref": "#/definitions/FeedProcessorTextFilter"
                             }
                         ]
                     },
@@ -340,7 +343,11 @@
                             "description": "Group to target popularity against",
                             "type": "string",
                             "default": "following",
-                            "enum": ["followers", "following", "mutuals"]
+                            "enum": [
+                                "followers",
+                                "following",
+                                "mutuals"
+                            ]
                         },
                         "MinRelevance": {
                             "description": "Number of unique users needed interacting to show a post",
@@ -360,6 +367,58 @@
                     }
                 }
             }
+        },
+        "FeedProcessorTextFilter": {
+            "properties": {
+                "FilterOperations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "Contains": {
+                                    "type": "string"
+                                },
+                                "Expression": {
+                                    "type": "string",
+                                    "format": "regex"
+                                },
+                                "Exclude": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "oneOf": [
+                                {
+                                    "required": [
+                                        "Contains"
+                                    ]
+                                },
+                                {
+                                    "required": [
+                                        "Expression"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+                "FeedSource": {
+                    "type": "string",
+                    "default": "all",
+                    "enum": [
+                        "all",
+                        "following",
+                        "list"
+                    ]
+                },
+                "FeedSourceList": {
+                    "$ref": "#/definitions/atUriForList"
+                }
+            },
+            "required": [
+                "FilterOperations"
+            ]
         }
     }
 }
