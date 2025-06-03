@@ -21,8 +21,8 @@ public class DevController(
     IConfiguration configuration,
     FeedRegistry feedRegistry,
     FeedDbContext dbContext,
-    ATProtocol proto
-) : BskyControllerBase(configuration, proto)
+    IBskyApi api
+) : BskyControllerBase(configuration, api)
 {
     private bool DevEndpointsEnabled =>
         env.IsDevelopment() || (BskyConfig.Web?.EnableDevEndpoints ?? false);
@@ -53,11 +53,7 @@ public class DevController(
         }
 
         // Attempt login on first fetch
-        await EnsureLogin(cancellationToken);
-        if (Session == null)
-        {
-            throw new Exception("Not logged in!");
-        }
+        var self = await EnsureLogin(cancellationToken);
 
         logger.LogInformation(
             "Fetching feed {feed} with limit {limit} at cursor {cursor}",
@@ -66,12 +62,7 @@ public class DevController(
             cursor
         );
 
-        var feedSkel = await feedInstance.GetFeedSkeleton(
-            Session.Did,
-            limit,
-            cursor,
-            cancellationToken
-        );
+        var feedSkel = await feedInstance.GetFeedSkeleton(self, limit, cursor, cancellationToken);
 
         // 25 is the limit for GetPostsAsync
         var feedsInSize = feedSkel.Feed.Take(25).Select(s => s.Post).ToList();
@@ -79,11 +70,11 @@ public class DevController(
         {
             return TypedResults.Ok("Feed is empty.");
         }
-        var hydratedRes = await Proto.Feed.GetPostsAsync(feedsInSize, cancellationToken);
-        var hydrated = hydratedRes.HandleResult();
+
+        var hydrated = await api.GetPosts(feedsInSize, cancellationToken);
 
         Response.Headers.Append("X-Bsky-Cursor", feedSkel.Cursor);
-        return TypedResults.Json(hydrated, Proto.Options.JsonSerializerOptions);
+        return TypedResults.Json(hydrated, api.JsonSerializerOptions);
     }
 
     [HttpGet("status")]
@@ -140,21 +131,15 @@ public class DevController(
 
         // Attempt login on first fetch
         await EnsureLogin(cancellationToken);
-        if (Session == null)
-        {
-            throw new Exception("Not logged in!");
-        }
 
         var handled = ATHandle.Create(handle) ?? throw new Exception("Failed to create handle");
-        var resolvedDidRes = await Proto.Identity.ResolveHandleAsync(handled, cancellationToken);
-        var resolvedDid = resolvedDidRes.HandleResult();
+        var resolvedDid = await api.ResolveHandle(handled, cancellationToken);
         if (resolvedDid?.Did == null)
         {
             throw new Exception("Failed to resolve DID");
         }
-        var profileRes = await Proto.Actor.GetProfileAsync(resolvedDid.Did, cancellationToken);
-        var profile = profileRes.HandleResult();
-        return TypedResults.Json(profile, Proto.Options.JsonSerializerOptions);
+        var profile = await api.GetProfile(resolvedDid.Did, cancellationToken);
+        return TypedResults.Json(profile, api.JsonSerializerOptions);
     }
 
     [HttpGet("query/post")]
@@ -170,14 +155,10 @@ public class DevController(
 
         // Attempt login on first fetch
         await EnsureLogin(cancellationToken);
-        if (Session == null)
-        {
-            throw new Exception("Not logged in!");
-        }
 
-        var postRes = await Proto.Feed.GetPostsAsync([ATUri.Create(atUri)], cancellationToken);
-        var post = postRes.HandleResult()?.Posts.FirstOrDefault();
-        return TypedResults.Json(post, Proto.Options.JsonSerializerOptions);
+        var postRes = await api.GetPosts([ATUri.Create(atUri)], cancellationToken);
+        var post = postRes?.Posts.FirstOrDefault();
+        return TypedResults.Json(post, api.JsonSerializerOptions);
     }
 
     [HttpGet("query/cached-post")]
@@ -220,11 +201,7 @@ public class DevController(
             return TypedResults.NotFound();
         }
 
-        await EnsureLogin(cancellationToken);
-        if (Session == null)
-        {
-            throw new Exception("Not logged in!");
-        }
+        var self = await EnsureLogin(cancellationToken);
 
         logger.LogInformation("Installing feeds");
 
@@ -246,16 +223,14 @@ public class DevController(
                 createdAt: DateTime.UtcNow
             );
 
-            var recordRefResult = await Proto.Repo.PutRecordAsync(
-                Session.Did,
+            var recordRef = await api.RepoPutRecord(
+                self,
                 BskyConstants.CollectionTypeFeedGenerator,
                 feed.FeedShortname,
                 record,
-                validate: true,
-                cancellationToken: cancellationToken
+                true,
+                cancellationToken
             );
-
-            var recordRef = recordRefResult.HandleResult();
             if (recordRef != null)
             {
                 logger.LogDebug(

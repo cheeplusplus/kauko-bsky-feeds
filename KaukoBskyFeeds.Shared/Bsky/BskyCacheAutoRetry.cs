@@ -11,11 +11,11 @@ public static class BskyCacheAutoRetry
     public static IBskyCache Create(IServiceProvider serviceProvider)
     {
         var logger = serviceProvider.GetRequiredService<ILogger<BskyCacheAutoRetryGenerator>>();
-        var proto = serviceProvider.GetRequiredService<ATProtocol>();
+        var api = serviceProvider.GetRequiredService<IBskyApi>();
 
         var originalClass = ActivatorUtilities.CreateInstance<BskyCache>(serviceProvider);
         var generator = new ProxyGenerator();
-        var interceptor = new BskyCacheAutoRetryGenerator(logger, proto);
+        var interceptor = new BskyCacheAutoRetryGenerator(logger, api);
         var proxy = generator.CreateInterfaceProxyWithTargetInterface<IBskyCache>(
             originalClass,
             interceptor
@@ -25,7 +25,7 @@ public static class BskyCacheAutoRetry
 
     private class BskyCacheAutoRetryGenerator(
         ILogger<BskyCacheAutoRetryGenerator> logger,
-        ATProtocol proto
+        IBskyApi api
     ) : IAsyncInterceptor
     {
         public void InterceptSynchronous(IInvocation invocation)
@@ -73,7 +73,7 @@ public static class BskyCacheAutoRetry
                     invocation.MethodInvocationTarget.Name
                 );
 
-                await proto.SessionManager.RefreshSessionAsync(); // refresh the session first
+                await api.RefreshSession(); // refresh the session first
                 invocation.Proceed();
                 var taskRetry = (Task<TResult>)invocation.ReturnValue;
                 return await taskRetry;

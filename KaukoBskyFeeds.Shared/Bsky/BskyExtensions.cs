@@ -61,6 +61,7 @@ public static class BskyExtensions
             var logger = f.GetService<ILogger<ATProtocol>>();
             return new ATProtocolBuilder().EnableAutoRenewSession(true).WithLogger(logger).Build();
         });
+        collection.AddSingleton<IBskyApi, BskyApi>();
 
         return collection;
     }

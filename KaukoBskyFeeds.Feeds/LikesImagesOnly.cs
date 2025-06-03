@@ -1,4 +1,3 @@
-using FishyFlip;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Db;
@@ -14,12 +13,12 @@ namespace KaukoBskyFeeds.Feeds;
 
 [BskyFeed(nameof(LikesImagesOnly), typeof(LikesImagesOnlyFeedConfig))]
 public class LikesImagesOnly(
-    ATProtocol proto,
     LikesImagesOnlyFeedConfig feedConfig,
+    FeedInstanceMetadata feedMeta,
     FeedDbContext db,
+    IBskyApi api,
     HybridCache mCache,
-    IBskyCache bsCache,
-    FeedInstanceMetadata feedMeta
+    IBskyCache bsCache
 ) : IFeed
 {
     public BaseFeedConfig Config => feedConfig;
@@ -31,11 +30,7 @@ public class LikesImagesOnly(
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
-
+        api.AssertLogin();
         if (requestor == null)
         {
             throw new FeedProhibitedException();
@@ -44,12 +39,12 @@ public class LikesImagesOnly(
         // This only looks at the past 50 likes, which is not ideal
         // TODO: Support cursors and pagination here
         // It'll be kind of complex since not every like has an image so we'll probably want to page ~50 at a time
-        var likesUris = (await bsCache.GetLikes(proto, requestor, cancellationToken)).ToList();
+        var likesUris = (await bsCache.GetLikes(requestor, cancellationToken)).ToList();
 
         List<Db.Models.Post> posts;
         if (feedConfig.FetchTimeline)
         {
-            var hydratedPosts = await bsCache.GetPosts(proto, likesUris, cancellationToken);
+            var hydratedPosts = await bsCache.GetPosts(likesUris, cancellationToken);
             posts = hydratedPosts
                 .WhereNotNull()
                 .Select(s => s.ToDbPost())

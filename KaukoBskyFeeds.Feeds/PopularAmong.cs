@@ -15,12 +15,12 @@ namespace KaukoBskyFeeds.Feeds;
 
 [BskyFeed(nameof(PopularAmong), typeof(PopularAmongFeedConfig))]
 public class PopularAmong(
-    ATProtocol proto,
     PopularAmongFeedConfig feedConfig,
+    FeedInstanceMetadata feedMeta,
     FeedDbContext db,
+    IBskyApi api,
     HybridCache mCache,
-    IBskyCache bsCache,
-    FeedInstanceMetadata feedMeta
+    IBskyCache bsCache
 ) : IFeed
 {
     public BaseFeedConfig Config => feedConfig;
@@ -32,28 +32,20 @@ public class PopularAmong(
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        var self = api.AssertLogin();
+        var target = requestor ?? self;
 
         var targetDids = feedConfig.TargetGroup switch
         {
             PopularAmongGroupSetting.Followers => await bsCache.GetFollowers(
-                proto,
-                requestor ?? proto.Session.Did,
+                target,
                 cancellationToken
             ),
             PopularAmongGroupSetting.Following => await bsCache.GetFollowing(
-                proto,
-                requestor ?? proto.Session.Did,
+                target,
                 cancellationToken
             ),
-            PopularAmongGroupSetting.Mutuals => await bsCache.GetMutuals(
-                proto,
-                requestor ?? proto.Session.Did,
-                cancellationToken
-            ),
+            PopularAmongGroupSetting.Mutuals => await bsCache.GetMutuals(target, cancellationToken),
             _ => throw new Exception("Invalid target group"),
         };
         var targetListStr = targetDids.Select(s => s.Handler).ToList();
@@ -137,7 +129,6 @@ public class PopularAmong(
         {
             // Fetch and filter posts from the server, to if they have image embeds
             var posts = await bsCache.GetPosts(
-                proto,
                 allInteractionsUseful.Select(s => s.PostUri),
                 cancellationToken
             );

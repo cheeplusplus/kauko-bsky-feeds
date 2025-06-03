@@ -1,4 +1,3 @@
-using FishyFlip;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Db;
@@ -18,13 +17,12 @@ namespace KaukoBskyFeeds.Feeds;
 [BskyFeed(nameof(TimelineMinusList), typeof(TimelineMinusListFeedConfig))]
 public class TimelineMinusList(
     ILogger<TimelineMinusList> logger,
-    ATProtocol proto,
     TimelineMinusListFeedConfig feedConfig,
+    FeedInstanceMetadata feedMeta,
     FeedDbContext db,
-    BskyMetrics bskyMetrics,
+    IBskyApi api,
     HybridCache mCache,
-    IBskyCache bsCache,
-    FeedInstanceMetadata feedMeta
+    IBskyCache bsCache
 ) : IFeed
 {
     public BaseFeedConfig Config => feedConfig;
@@ -36,18 +34,13 @@ public class TimelineMinusList(
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        var self = api.AssertLogin();
+        var target = requestor ?? self;
 
-        var followingList = (
-            await bsCache.GetFollowing(proto, proto.Session.Did, cancellationToken)
-        ).ToList();
+        var followingList = (await bsCache.GetFollowing(target, cancellationToken)).ToList();
         var followingListStr = followingList.Select(s => s.Handler);
-        var mutualsDids = (await bsCache.GetMutuals(proto, proto.Session.Did, cancellationToken)).ToList();
+        var mutualsDids = (await bsCache.GetMutuals(target, cancellationToken)).ToList();
         var listMemberDids = await bsCache.GetListMembers(
-            proto,
             new ATUri(feedConfig.ListUri),
             cancellationToken
         );
@@ -58,7 +51,6 @@ public class TimelineMinusList(
             foreach (var listUri in feedConfig.AdditionalLists)
             {
                 var moreListMemberDids = await bsCache.GetListMembers(
-                    proto,
                     new ATUri(listUri),
                     cancellationToken
                 );
@@ -72,10 +64,10 @@ public class TimelineMinusList(
         string? newCursor = null;
         if (feedConfig.FetchTimeline)
         {
-            var postTlRes = await proto
-                .Feed.GetTimelineAsync(cursor: cursor, cancellationToken: cancellationToken)
-                .Record(bskyMetrics, "app.bsky.feed.getTimeline");
-            var postTl = postTlRes.HandleResult();
+            var postTl = await api.GetTimeline(
+                cursor: cursor,
+                cancellationToken: cancellationToken
+            );
             posts = (postTl?.Feed ?? [])
                 .Where(w =>
                     ((feedConfig.AlwaysShowUserReposts?.Count ?? 0) > 0) || w.Reason == null
@@ -114,13 +106,7 @@ public class TimelineMinusList(
             PostJudgement judgement;
             try
             {
-                judgement = JudgePost(
-                    s,
-                    requestor ?? proto.Session.Did,
-                    followingList,
-                    mutualsDids,
-                    listMemberDidsList
-                );
+                judgement = JudgePost(s, target, followingList, mutualsDids, listMemberDidsList);
             }
             catch (Exception ex)
             {

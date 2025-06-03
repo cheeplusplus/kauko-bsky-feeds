@@ -1,8 +1,6 @@
-using FishyFlip;
 using FishyFlip.Lexicon.App.Bsky.Actor;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
-using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
 
@@ -10,69 +8,46 @@ namespace KaukoBskyFeeds.Shared.Bsky;
 
 public interface IBskyCache
 {
-    Task<PostView?> GetPost(
-        ATProtocol proto,
-        ATUri postUri,
-        CancellationToken cancellationToken = default
-    );
+    Task<PostView?> GetPost(ATUri postUri, CancellationToken cancellationToken = default);
 
     Task<IEnumerable<PostView?>> GetPosts(
-        ATProtocol proto,
         IEnumerable<ATUri> postUris,
         CancellationToken cancellationToken = default
     );
 
     Task<IEnumerable<ATDid>> GetFollowing(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     );
 
     Task<IEnumerable<ATDid>> GetFollowers(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     );
 
-    Task<IEnumerable<ATDid>> GetMutuals(
-        ATProtocol proto,
-        ATDid user,
-        CancellationToken cancellationToken = default
-    );
+    Task<IEnumerable<ATDid>> GetMutuals(ATDid user, CancellationToken cancellationToken = default);
 
     Task<IEnumerable<ATDid>> GetListMembers(
-        ATProtocol proto,
         ATUri listUri,
         CancellationToken cancellationToken = default
     );
 
     Task<ProfileViewDetailed?> GetProfile(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     );
 
     Task<Dictionary<ATDid, ProfileViewDetailed?>> GetProfiles(
-        ATProtocol proto,
         IEnumerable<ATDid> users,
         CancellationToken cancellationToken = default
     );
 
-    Task<IEnumerable<ATUri>> GetLikes(
-        ATProtocol proto,
-        ATDid user,
-        CancellationToken cancellationToken = default
-    );
+    Task<IEnumerable<ATUri>> GetLikes(ATDid user, CancellationToken cancellationToken = default);
 
-    Task<IEnumerable<ATUri>> GetLists(
-        ATProtocol proto,
-        ATDid user,
-        CancellationToken cancellationToken = default
-    );
+    Task<IEnumerable<ATUri>> GetLists(ATDid user, CancellationToken cancellationToken = default);
 }
 
-public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics bskyMetrics)
-    : IBskyCache
+public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cache) : IBskyCache
 {
     public static readonly TimeSpan NormalCacheDuration = TimeSpan.FromMinutes(10);
 
@@ -87,25 +62,18 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     };
 
     public async Task<PostView?> GetPost(
-        ATProtocol proto,
         ATUri postUri,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
             $"post_{postUri}",
             async (ct) =>
             {
                 logger.LogDebug("Fetching post {postUri} following", postUri);
-                var r = await proto
-                    .Feed.GetPostsAsync([postUri], ct)
-                    .Record(bskyMetrics, "app.bsky.feed.getPosts1");
-                var d = r.HandleResult();
+                var d = await api.GetPosts([postUri], ct);
                 return d?.Posts.FirstOrDefault();
             },
             DefaultOpts,
@@ -117,15 +85,11 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     private record GetPostsDict(ATUri AtUri, PostView? Post);
 
     public async Task<IEnumerable<PostView?>> GetPosts(
-        ATProtocol proto,
         IEnumerable<ATUri> postUris,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        api.AssertLogin();
 
         var postUriList = postUris.ToList();
 
@@ -149,11 +113,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
             var postChunks = postsToFetch.Chunk(25); // max profiles for GetPostsAsync
             foreach (var postGroup in postChunks)
             {
-                var freshPostsRes = await proto
-                    .Feed.GetPostsAsync(postGroup.ToList(), cancellationToken)
-                    .Record(bskyMetrics, "app.bsky.feed.getPosts");
-                var freshPosts = freshPostsRes.HandleResult();
-
+                var freshPosts = await api.GetPosts(postGroup.ToList(), cancellationToken);
                 foreach (var post in freshPosts?.Posts ?? [])
                 {
                     allPosts[post.Uri] = new GetPostsDict(post.Uri, post);
@@ -172,15 +132,11 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     }
 
     public async Task<IEnumerable<ATDid>> GetFollowing(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        var self = api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
             $"user_{user}_following",
@@ -190,14 +146,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                 return await BskyExtensions.GetAllResults(
                     async (cursor, ict) =>
                     {
-                        var r = await proto
-                            .Graph.GetFollowsAsync(
-                                proto.Session.Handle,
-                                cursor: cursor,
-                                cancellationToken: ict
-                            )
-                            .Record(bskyMetrics, "app.bsky.graph.getFollows");
-                        var d = r.HandleResult();
+                        var d = await api.GetFollows(self, cursor, ict);
                         return (d?.Follows.Select(s => s.Did), d?.Cursor);
                     },
                     ct
@@ -210,15 +159,11 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     }
 
     public async Task<IEnumerable<ATDid>> GetFollowers(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        var self = api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
             $"user_{user}_followers",
@@ -229,14 +174,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                     await BskyExtensions.GetAllResults(
                         async (cursor, ict) =>
                         {
-                            var r = await proto
-                                .Graph.GetFollowersAsync(
-                                    proto.Session.Handle,
-                                    cursor: cursor,
-                                    cancellationToken: ict
-                                )
-                                .Record(bskyMetrics, "app.bsky.graph.getFollowers");
-                            var d = r.HandleResult();
+                            var d = await api.GetFollowers(self, cursor, ict);
                             return (d?.Followers.Select(s => s.Did), d?.Cursor);
                         },
                         ct
@@ -250,13 +188,12 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     }
 
     public async Task<IEnumerable<ATDid>> GetMutuals(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     )
     {
-        var followingList = await GetFollowing(proto, user, cancellationToken);
-        var followersList = await GetFollowers(proto, user, cancellationToken);
+        var followingList = await GetFollowing(user, cancellationToken);
+        var followersList = await GetFollowers(user, cancellationToken);
 
         return followingList
             .Select(s => s.Handler)
@@ -268,15 +205,11 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     }
 
     public async Task<IEnumerable<ATDid>> GetListMembers(
-        ATProtocol proto,
         ATUri listUri,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
             $"list_{listUri}_members",
@@ -286,10 +219,7 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
                 return await BskyExtensions.GetAllResults(
                     async (cursor, ict) =>
                     {
-                        var r = await proto
-                            .Graph.GetListAsync(listUri, cursor: cursor, cancellationToken: ict)
-                            .Record(bskyMetrics, "app.bsky.graph.getList");
-                        var d = r.HandleResult();
+                        var d = await api.GetList(listUri, cursor, ict);
                         return (d?.Items.Select(s => s.Subject.Did), d?.Cursor);
                     },
                     ct
@@ -302,25 +232,18 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     }
 
     public async Task<ProfileViewDetailed?> GetProfile(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
             $"user_{user}_profile",
             async (ct) =>
             {
                 logger.LogDebug("Fetching user {user} profile", user);
-                var profileRes = await proto
-                    .Actor.GetProfileAsync(user, ct)
-                    .Record(bskyMetrics, "app.bsky.actor.getProfile");
-                return profileRes.HandleResult();
+                return await api.GetProfile(user, ct);
             },
             DefaultOpts,
             tags: ["user", $"user/{user}", $"user/{user}/profile"],
@@ -331,15 +254,11 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     private record GetProfilesDict(ATDid Did, ProfileViewDetailed? Profile);
 
     public async Task<Dictionary<ATDid, ProfileViewDetailed?>> GetProfiles(
-        ATProtocol proto,
         IEnumerable<ATDid> users,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        api.AssertLogin();
 
         // fetch all available cached entries first
         var allProfiles = new Dictionary<ATDid, GetProfilesDict>();
@@ -361,13 +280,10 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
             var profileChunks = profilesToFetch.Chunk(25); // max profiles for GetProfilesAsync
             foreach (var profileGroup in profileChunks)
             {
-                var freshProfilesRes = await proto
-                    .Actor.GetProfilesAsync(
-                        profileGroup.Cast<ATIdentifier>().ToList(),
-                        cancellationToken
-                    )
-                    .Record(bskyMetrics, "app.bsky.actor.getProfiles");
-                var freshProfiles = freshProfilesRes.HandleResult();
+                var freshProfiles = await api.GetProfiles(
+                    profileGroup.Cast<ATIdentifier>().ToList(),
+                    cancellationToken
+                );
 
                 foreach (var profile in freshProfiles?.Profiles ?? [])
                 {
@@ -388,29 +304,18 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
 
     // This only gets recent likes
     public async Task<IEnumerable<ATUri>> GetLikes(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
                 $"user_{user}_likes",
                 async (ct) =>
                 {
                     logger.LogDebug("Fetching user {user} likes", user);
-                    var r = await proto
-                        .Repo.ListRecordsAsync(
-                            user,
-                            BskyConstants.CollectionTypeLike,
-                            cancellationToken: ct
-                        )
-                        .Record(bskyMetrics, "com.atproto.repo.listRecords");
-                    var d = r.HandleResult();
+                    var d = await api.RepoListRecords(user, BskyConstants.CollectionTypeLike, ct);
                     return d
                         ?.Records.Select(s => s.Value as Like)
                         .Select(s => s?.Subject?.Uri)
@@ -423,25 +328,18 @@ public class BskyCache(ILogger<BskyCache> logger, HybridCache cache, BskyMetrics
     }
 
     public async Task<IEnumerable<ATUri>> GetLists(
-        ATProtocol proto,
         ATDid user,
         CancellationToken cancellationToken = default
     )
     {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
+        api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
                 $"user_{user}_lists",
                 async (ct) =>
                 {
                     logger.LogDebug("Fetching user {user} lists", user);
-                    var r = await proto
-                        .Graph.GetListsAsync(user, cancellationToken: ct)
-                        .Record(bskyMetrics, "app.bsky.graph.getLists");
-                    var d = r.HandleResult();
+                    var d = await api.GetLists(user, ct);
                     return d?.Lists.Select(s => s.Uri);
                 },
                 DefaultOpts,

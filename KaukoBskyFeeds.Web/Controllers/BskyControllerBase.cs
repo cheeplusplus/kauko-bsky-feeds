@@ -1,37 +1,25 @@
 using FishyFlip;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Shared;
+using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 
 namespace KaukoBskyFeeds.Web.Controllers;
 
-public abstract class BskyControllerBase(IConfiguration configuration, ATProtocol proto)
+public abstract class BskyControllerBase(IConfiguration configuration, IBskyApi api)
     : ControllerBase
 {
-    protected ATProtocol Proto { get; private set; } = proto;
+    protected IBskyApi Api { get; } = api;
 
     protected readonly BskyConfigBlock BskyConfig =
         configuration.GetSection("BskyConfig").Get<BskyConfigBlock>()
         ?? throw new Exception("Failed to read configuration");
-    protected Session? Session { get; private set; }
 
-    protected async Task EnsureLogin(CancellationToken cancellationToken = default)
+    protected async Task<ATDid> EnsureLogin(CancellationToken cancellationToken = default)
     {
-        if (Session == null || !Proto.IsAuthenticated)
-        {
-            Session =
-                Proto.Session
-                ?? (
-                    await Proto.AuthenticateWithPasswordResultAsync(
-                        BskyConfig.Auth.Username,
-                        BskyConfig.Auth.Password,
-                        cancellationToken: cancellationToken
-                    )
-                ).HandleResult()
-                ?? throw new Exception("Failed to login");
-        }
+        return await Api.Login(BskyConfig.Auth, cancellationToken);
     }
 
     private void AddRequestTag(string tag, string value)

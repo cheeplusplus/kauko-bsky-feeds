@@ -19,7 +19,7 @@ public partial class JetstreamWorker(
     IHostApplicationLifetime lifetime,
     FeedDbContext db,
     IngestMetrics metrics,
-    ATProtocol proto,
+    IBskyApi api,
     IBskyCache bskyCache,
     HybridCache memCache,
     IJetstreamConsumer consumer
@@ -144,25 +144,9 @@ public partial class JetstreamWorker(
         CancellationToken cancellationToken = default
     )
     {
-        async Task EnsureLogin()
-        {
-            if (proto.IsAuthenticated)
-            {
-                return;
-            }
-
-            (
-                await proto.AuthenticateWithPasswordResultAsync(
-                    _bskyConfig.Auth.Username,
-                    _bskyConfig.Auth.Password,
-                    cancellationToken: cancellationToken
-                )
-            ).HandleResult();
-        }
-
         return await memCache.GetOrCreateAsync(
             $"ingest_wanteddids_{collection}",
-            async (_) =>
+            async (ict) =>
             {
                 // Fetch wanted DIDs
                 List<string> wantedDids = [];
@@ -172,7 +156,7 @@ public partial class JetstreamWorker(
                     {
                         if (targetFilter.UserFollowsAndLists != null)
                         {
-                            await EnsureLogin();
+                            await api.Login(_bskyConfig.Auth, ict);
 
                             foreach (var userDidStr in targetFilter.UserFollowsAndLists)
                             {
@@ -183,41 +167,28 @@ public partial class JetstreamWorker(
                                 }
 
                                 // Get everyone this user is following
-                                var userFollowingDids = await bskyCache.GetFollowing(
-                                    proto,
-                                    userDid,
-                                    cancellationToken
-                                );
+                                var userFollowingDids = await bskyCache.GetFollowing(userDid, ict);
                                 wantedDids.AddRange(userFollowingDids.Select(s => s.ToString()));
 
                                 // Get all of this user's lists
-                                var userLists = await bskyCache.GetLists(
-                                    proto,
-                                    userDid,
-                                    cancellationToken
-                                );
+                                var userLists = await bskyCache.GetLists(userDid, ict);
                                 foreach (var listDid in userLists)
                                 {
                                     // Add list members
-                                    var userListDids = await bskyCache.GetListMembers(
-                                        proto,
-                                        listDid,
-                                        cancellationToken
-                                    );
+                                    var userListDids = await bskyCache.GetListMembers(listDid, ict);
                                     wantedDids.AddRange(userListDids.Select(s => s.ToString()));
                                 }
                             }
                         }
                         if (targetFilter.ListUris != null)
                         {
-                            await EnsureLogin();
+                            await api.Login(_bskyConfig.Auth, ict);
 
                             foreach (var listUri in targetFilter.ListUris)
                             {
                                 var listDids = await bskyCache.GetListMembers(
-                                    proto,
                                     FishyFlip.Models.ATUri.Create(listUri),
-                                    cancellationToken
+                                    ict
                                 );
                                 wantedDids.AddRange(listDids.Select(s => s.ToString()));
                             }

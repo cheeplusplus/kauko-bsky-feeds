@@ -31,6 +31,14 @@ public class BskyMetrics
 
 public static class BskyMetricsExtensions
 {
+    /// <summary>
+    /// Record a request to the metrics provider.
+    /// </summary>
+    /// <param name="apiRequest">API request task being made.</param>
+    /// <param name="metrics">Metrics provider.</param>
+    /// <param name="xrpcName">XRPC name.</param>
+    /// <typeparam name="T">Result type.</typeparam>
+    /// <returns>Completed API response.</returns>
     public static async Task<Result<T>> Record<T>(
         this Task<Result<T>> apiRequest,
         BskyMetrics metrics,

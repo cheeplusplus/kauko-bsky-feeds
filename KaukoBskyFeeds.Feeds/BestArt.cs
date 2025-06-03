@@ -1,4 +1,3 @@
-using FishyFlip;
 using FishyFlip.Lexicon.App.Bsky.Actor;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
@@ -16,12 +15,11 @@ namespace KaukoBskyFeeds.Feeds;
 
 [BskyFeed(nameof(BestArt), typeof(BestArtFeedConfig))]
 public class BestArt(
-    ATProtocol proto,
     BestArtFeedConfig feedConfig,
+    FeedInstanceMetadata feedMeta,
     FeedDbContext db,
     HybridCache mCache,
-    IBskyCache bsCache,
-    FeedInstanceMetadata feedMeta
+    IBskyCache bsCache
 ) : IFeed
 {
     private int FeedLimit => feedConfig.FeedLimit;
@@ -42,7 +40,6 @@ public class BestArt(
         if (feedConfig.RestrictToListUri != null)
         {
             var listMemberDids = await bsCache.GetListMembers(
-                proto,
                 new ATUri(feedConfig.RestrictToListUri),
                 cancellationToken
             );
@@ -85,7 +82,7 @@ public class BestArt(
                 .Select(s => s.GetAuthorDid())
                 .DistinctBy(s => s.ToString())
                 .ToArray();
-            var authorProfiles = await bsCache.GetProfiles(proto, authorDids, cancellationToken);
+            var authorProfiles = await bsCache.GetProfiles(authorDids, cancellationToken);
 
             sortedFeed = finalPostList
                 .Select(s => new

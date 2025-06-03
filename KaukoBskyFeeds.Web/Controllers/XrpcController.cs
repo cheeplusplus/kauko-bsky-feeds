@@ -13,8 +13,8 @@ public class XrpcController(
     ILogger<XrpcController> logger,
     IConfiguration configuration,
     FeedRegistry feedRegistry,
-    ATProtocol proto
-) : BskyControllerBase(configuration, proto)
+    IBskyApi api
+) : BskyControllerBase(configuration, api)
 {
     [HttpGet("app.bsky.feed.getFeedSkeleton")]
     public async Task<
@@ -44,14 +44,10 @@ public class XrpcController(
         );
 
         // Attempt login on first fetch
-        await EnsureLogin(cancellationToken);
-        if (Session == null)
-        {
-            throw new Exception("Not logged in!");
-        }
+        var self = await EnsureLogin(cancellationToken);
 
         // Handle feed owner restriction
-        if (feedInstance.Config.RestrictToFeedOwner && Equals(requestingDid, Session?.Did))
+        if (feedInstance.Config.RestrictToFeedOwner && Equals(requestingDid, self))
         {
             return TypedResults.Unauthorized();
         }

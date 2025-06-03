@@ -16,13 +16,12 @@ namespace KaukoBskyFeeds.Feeds;
 
 [BskyFeed(nameof(ListImagesOnly), typeof(ListImagesOnlyFeedConfig))]
 public class ListImagesOnly(
-    ATProtocol proto,
     ListImagesOnlyFeedConfig feedConfig,
     FeedDbContext db,
-    BskyMetrics bskyMetrics,
+    FeedInstanceMetadata feedMeta,
+    IBskyApi api,
     HybridCache mCache,
-    IBskyCache bsCache,
-    FeedInstanceMetadata feedMeta
+    IBskyCache bsCache
 ) : IFeed
 {
     public BaseFeedConfig Config => feedConfig;
@@ -35,7 +34,7 @@ public class ListImagesOnly(
     )
     {
         var listUri = new ATUri(feedConfig.ListUri);
-        var listMemberDids = await bsCache.GetListMembers(proto, listUri, cancellationToken);
+        var listMemberDids = await bsCache.GetListMembers(listUri, cancellationToken);
         var feedDids = listMemberDids.Select(s => s.Handler);
 
         Expression<Func<Db.Models.Post, bool>> filter = w =>
@@ -47,10 +46,7 @@ public class ListImagesOnly(
         string? newCursor;
         if (feedConfig.FetchTimeline)
         {
-            var postTlRes = await proto
-                .Feed.GetListFeedAsync(listUri, limit ?? 50, cancellationToken: cancellationToken)
-                .Record(bskyMetrics, "app.bsky.feed.getListFeed");
-            var postTl = postTlRes.HandleResult();
+            var postTl = await api.GetListFeed(listUri, limit, cancellationToken);
             posts = (postTl?.Feed ?? [])
                 .Where(w => w.Reason == null)
                 .Select(s => s.ToDbPost())

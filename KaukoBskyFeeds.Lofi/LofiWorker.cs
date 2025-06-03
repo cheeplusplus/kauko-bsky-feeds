@@ -14,7 +14,7 @@ namespace KaukoBskyFeeds.Lofi;
 public class LofiWorker(
     ILogger<LofiWorker> logger,
     IConfiguration config,
-    ATProtocol proto,
+    IBskyApi api,
     BskyCache cache,
     IJetstreamConsumer jsc
 ) : IHostedService
@@ -27,21 +27,16 @@ public class LofiWorker(
         ?? throw new Exception("Could not read config");
     private readonly CancellationTokenSource _cts = new();
     private readonly Lock _printLock = new();
-    private Session? _session;
     private List<string>? _following;
     private long? _lastCursor;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        await EnsureLogin(cancellationToken);
-        if (_session == null)
-        {
-            throw new Exception("Not logged in");
-        }
+        var self = await api.Login(_bskyAuthConfig, cancellationToken);
 
         if (_lofiConfig.CruiseOwnFeed)
         {
-            _following = (await cache.GetFollowing(proto, _session.Did, cancellationToken))
+            _following = (await cache.GetFollowing(self, cancellationToken))
                 .Select(s => s.ToString())
                 .ToList();
         }
@@ -122,7 +117,7 @@ public class LofiWorker(
         }
         if (
             _lofiConfig.CruiseOwnFeed
-            && (e.Did != _session?.Did.ToString())
+            && (e.Did != api.LoggedInUser?.ToString())
             && (_following == null || !_following.Contains(e.Did))
         )
         {
@@ -163,8 +158,7 @@ public class LofiWorker(
             .WhereNotNull()
             .ToList();
 
-        var hydratedReq = await proto.Feed.GetPostsAsync(posts, _cts.Token);
-        var hydrated = hydratedReq.HandleResult();
+        var hydrated = await api.GetPosts(posts, _cts.Token);
         var msgPost = hydrated?.Posts.SingleOrDefault(s => s.Uri.ToString() == msg.ToAtUri());
         if (msgPost == null)
         {
@@ -185,23 +179,6 @@ public class LofiWorker(
         lock (_printLock)
         {
             report.Print(_lofiConfig);
-        }
-    }
-
-    private async Task EnsureLogin(CancellationToken cancellationToken = default)
-    {
-        if (_session == null || !proto.IsAuthenticated)
-        {
-            _session =
-                proto.Session
-                ?? (
-                    await proto.AuthenticateWithPasswordResultAsync(
-                        _bskyAuthConfig.Username,
-                        _bskyAuthConfig.Password,
-                        cancellationToken: cancellationToken
-                    )
-                ).HandleResult()
-                ?? throw new Exception("Failed to login");
         }
     }
 }
