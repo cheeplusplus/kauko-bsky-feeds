@@ -45,7 +45,7 @@ public class TimelineMinusList(
             await bsCache.GetFollowing(proto, proto.Session.Did, cancellationToken)
         ).ToList();
         var followingListStr = followingList.Select(s => s.Handler);
-        var mutualsDids = await GetMutuals(cancellationToken);
+        var mutualsDids = (await bsCache.GetMutuals(proto, proto.Session.Did, cancellationToken)).ToList();
         var listMemberDids = await bsCache.GetListMembers(
             proto,
             new ATUri(feedConfig.ListUri),
@@ -174,26 +174,6 @@ public class TimelineMinusList(
         newCursor ??= filteredFeed.LastOrDefault()?.Cursor.AsCursor();
 
         return new CustomSkeletonFeed(feedOutput, newCursor);
-    }
-
-    private async Task<List<ATDid>> GetMutuals(CancellationToken cancellationToken = default)
-    {
-        if (proto.Session == null)
-        {
-            throw new NotLoggedInException();
-        }
-
-        var followingList = await bsCache.GetFollowing(proto, proto.Session.Did, cancellationToken);
-        var followersList = await bsCache.GetFollowers(proto, proto.Session.Did, cancellationToken);
-
-        // For some reason the comparer isn't working so do this the hard way
-        return followingList
-            .Select(s => s.Handler)
-            .Intersect(followersList.Select(s => s.Handler))
-            .Select(ATDid.Create)
-            .Where(w => w != null)
-            .Cast<ATDid>()
-            .ToList();
     }
 
     private PostJudgement JudgePost(
