@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using EFCore.BulkExtensions;
 using FishyFlip;
 using KaukoBskyFeeds.Db;
@@ -8,11 +9,13 @@ using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Metrics;
+using KaukoBskyFeeds.Shared.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace KaukoBskyFeeds.Ingest.Workers;
 
@@ -25,6 +28,7 @@ public class JetstreamWorker(
     ATProtocol proto,
     IBskyCache bskyCache,
     HybridCache memCache,
+    IFastCounter fastCounter,
     IJetstreamConsumer consumer
 ) : IHostedService
 {
@@ -38,7 +42,12 @@ public class JetstreamWorker(
     private DateTime? _lastSaveMarker;
     private DateTime _lastCleanup = DateTime.MinValue;
     private int _saveFailureCount;
-    private readonly BulkInsertHolder _insertHolder = new(db, metrics);
+    private readonly BulkInsertHolder _insertHolder = new(
+        db,
+        metrics,
+        fastCounter,
+        configuration.GetSection("IngestConfig").Get<IngestConfig>() ?? new()
+    );
 
     private int SaveMaxSec => _ingestConfig.SaveMaxSec;
     private int SaveMaxSize => _ingestConfig.SaveMaxSize;
@@ -457,6 +466,7 @@ public class JetstreamWorker(
             return;
         }
 
+        var shouldSaveToDb = true;
         try
         {
             var wantedDids = await FetchWantedDids(message.Commit.Collection, cancellationToken);
@@ -469,7 +479,7 @@ public class JetstreamWorker(
                 )
             )
             {
-                return;
+                shouldSaveToDb = false;
             }
         }
         catch (Exception ex)
@@ -482,17 +492,19 @@ public class JetstreamWorker(
             var like = message.AsDbPostLike();
             if (like != null)
             {
-                _insertHolder.Add(like);
+                _insertHolder.Add(like, shouldSaveToDb);
             }
         }
         else if (message.Commit.Operation == JetstreamOperation.Delete)
         {
             _insertHolder.Delete(
-                new PostRecordRef(message.Did, message.Commit.RecordKey),
+                message.GetRef(),
+                message.GetSubjectRef(),
                 d =>
                     d.PostLikes.Where(w =>
                         w.LikeDid == message.Did && w.LikeRkey == message.Commit.RecordKey
-                    )
+                    ),
+                shouldSaveToDb
             );
         }
         else
@@ -516,6 +528,7 @@ public class JetstreamWorker(
             return;
         }
 
+        var shouldSaveToDb = true;
         try
         {
             var wantedDids = await FetchWantedDids(message.Commit.Collection, cancellationToken);
@@ -528,7 +541,7 @@ public class JetstreamWorker(
                 )
             )
             {
-                return;
+                shouldSaveToDb=false;
             }
         }
         catch (Exception ex)
@@ -542,17 +555,19 @@ public class JetstreamWorker(
             var repost = message.AsDbPostRepost();
             if (repost != null)
             {
-                _insertHolder.Add(repost);
+                _insertHolder.Add(repost, shouldSaveToDb);
             }
         }
         else if (message.Commit.Operation == JetstreamOperation.Delete)
         {
             _insertHolder.Delete(
-                new PostRecordRef(message.Did, message.Commit.RecordKey),
+                message.GetRef(),
+                message.GetSubjectRef(),
                 d =>
                     d.PostReposts.Where(w =>
                         w.RepostDid == message.Did && w.RepostRkey == message.Commit.RecordKey
-                    )
+                    ),
+                shouldSaveToDb
             );
         }
         else
@@ -578,18 +593,38 @@ public class JetstreamWorker(
     }
 }
 
-class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
+class BulkInsertHolder(
+    FeedDbContext db,
+    IngestMetrics metrics,
+    IFastCounter fastCounter,
+    IngestConfig ingestConfig
+)
 {
+    // Posts
     private readonly Dictionary<PostRecordRef, Post> _posts = [];
     private readonly List<IQueryable<Post>> _postDeletes = [];
+    
+    // Likes
     private readonly Dictionary<PostRecordRef, PostLike> _postLikes = [];
+    private readonly ConcurrentDictionary<PostRecordRef, int> _postLikeCounter = [];
     private readonly List<IQueryable<PostLike>> _postLikeDeletes = [];
+    private readonly List<PostRecordRef> _postLikeDeleteKeys = [];
+    
+    // Quote posts
     private readonly Dictionary<PostRecordRef, PostQuotePost> _postQuotePosts = [];
     private readonly List<IQueryable<PostQuotePost>> _postQuoteDeletes = [];
+    private readonly ConcurrentDictionary<PostRecordRef, int> _postQuoteCounter = [];
+    
+    // Replies
     private readonly Dictionary<PostRecordRef, PostReply> _postReplies = [];
     private readonly List<IQueryable<PostReply>> _postReplyDeletes = [];
+    private readonly ConcurrentDictionary<PostRecordRef, int> _postReplyCounter = [];
+    
+    // Reposts
     private readonly Dictionary<PostRecordRef, PostRepost> _postReposts = [];
     private readonly List<IQueryable<PostRepost>> _postRepostDeletes = [];
+    private readonly ConcurrentDictionary<PostRecordRef, int> _postRepostCounter = [];
+    private readonly List<PostRecordRef> _postRepostDeleteKeys = [];
 
     public void Add(Post item, PostReply? reply, PostQuotePost? quotePost)
     {
@@ -597,11 +632,13 @@ class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
         if (reply != null)
         {
             _postReplies.TryAdd(reply.Ref, reply);
+            _postReplyCounter.AddOrUpdate(item.Ref, 1, (p, i) => i + 1);
         }
 
         if (quotePost != null)
         {
             _postQuotePosts.TryAdd(quotePost.Ref, quotePost);
+            _postQuoteCounter.AddOrUpdate(item.Ref, 1, (p, i) => i + 1);
         }
     }
 
@@ -611,42 +648,80 @@ class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
 
         _postDeletes.Add(db.Posts.Where(w => w.Did == did && w.Rkey == rkey));
         _posts.Remove(key);
+        
         _postLikeDeletes.Add(db.PostLikes.Where(w => w.ParentDid == did && w.ParentRkey == rkey));
         _postLikes.Remove(key);
+        _postLikeCounter.Remove(key, out _);
+        _postLikeDeleteKeys.Add(key);
+        
         _postQuoteDeletes.Add(
             db.PostQuotePosts.Where(w => w.ParentDid == did && w.ParentRkey == rkey)
         );
         _postQuotePosts.Remove(key);
+        _postQuoteCounter.Remove(key, out _);
+
         _postReplyDeletes.Add(
             db.PostReplies.Where(w => w.ParentDid == did && w.ParentRkey == rkey)
         );
         _postReplies.Remove(key);
+        _postReplyCounter.Remove(key, out _);
+        
         _postRepostDeletes.Add(
             db.PostReposts.Where(w => w.ParentDid == did && w.ParentRkey == rkey)
         );
         _postReposts.Remove(key);
+        _postRepostCounter.Remove(key, out _);
     }
 
-    public void Add(PostLike item)
+    public void Add(PostLike item, bool saveToDb)
     {
-        _postLikes.TryAdd(item.Ref, item);
+        if (saveToDb)
+        {
+            _postLikes.TryAdd(item.Ref, item);
+        }
+        _postLikeCounter.AddOrUpdate(item.ParentRef, 1, (p, i) => i + 1);
     }
 
-    public void Delete(PostRecordRef key, Func<FeedDbContext, IQueryable<PostLike>> deleteExpr)
+    public void Delete(PostRecordRef? key, PostRecordRef? parentKey, Func<FeedDbContext, IQueryable<PostLike>> deleteExpr, bool saveToDb)
     {
-        _postLikeDeletes.Add(deleteExpr(db));
-        _postLikes.Remove(key);
+        if (saveToDb)
+        {
+            _postLikeDeletes.Add(deleteExpr(db));
+            if (key != null)
+            {
+                _postLikes.Remove(key);
+            }
+        }
+
+        if (parentKey != null)
+        {
+            _postLikeCounter.AddOrUpdate(parentKey, -1, (p, i) => i - 1);
+        }
     }
 
-    public void Add(PostRepost item)
+    public void Add(PostRepost item, bool saveToDb)
     {
-        _postReposts.TryAdd(item.Ref, item);
+        if (saveToDb)
+        {
+            _postReposts.TryAdd(item.Ref, item);
+        }
     }
 
-    public void Delete(PostRecordRef key, Func<FeedDbContext, IQueryable<PostRepost>> deleteExpr)
+    public void Delete(PostRecordRef? key, PostRecordRef? parentKey, Func<FeedDbContext, IQueryable<PostRepost>> deleteExpr, bool saveToDb)
     {
-        _postRepostDeletes.Add(deleteExpr(db));
-        _postReposts.Remove(key);
+        if (saveToDb)
+        {
+            _postRepostDeletes.Add(deleteExpr(db));
+            if (key != null)
+            {
+                _postReposts.Remove(key);
+            }
+        }
+
+        if (parentKey != null)
+        {
+            _postRepostCounter.AddOrUpdate(parentKey, -1, (p, i) => i - 1);
+        }
     }
 
     public int Size =>
@@ -699,6 +774,34 @@ class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
 
         await transaction.CommitAsync(cancellationToken);
 
+        var redisChunks = new Dictionary<string, (ConcurrentDictionary<PostRecordRef, int>, List<PostRecordRef>)>()
+        {
+            {FastCounterKeys.Like, (_postLikeCounter, _postLikeDeleteKeys)},
+            {FastCounterKeys.Quote, (_postQuoteCounter, [])},
+            {FastCounterKeys.Reply, (_postReplyCounter, [])},
+            {FastCounterKeys.Repost, (_postRepostCounter, _postRepostDeleteKeys)},
+        };
+        
+        foreach (var chunk in redisChunks)
+        {
+            var (chunkCounters, chunkDeletes) = chunk.Value;
+            foreach (var item in chunkCounters)
+            {
+                await fastCounter.Increment(
+                    FastCounterKeys.Post(item.Key.Did, item.Key.Rkey),
+                    chunk.Key,
+                    item.Value,
+                    TimeSpan.FromDays(ingestConfig.FeedHistoryDays),
+                    ExpireWhen.HasNoExpiry // the key should never persist more than FeedHistoryDays days (better would be abs date via post creationDate but oh well) 
+                );
+            }
+
+            foreach (var key in chunkDeletes)
+            {
+                await fastCounter.Delete(FastCounterKeys.Post(key.Did, key.Rkey));
+            }
+        }
+
         var upserts =
             _posts.Count
             + _postLikes.Count
@@ -718,14 +821,24 @@ class BulkInsertHolder(FeedDbContext db, IngestMetrics metrics)
         // Clear after committing the transaction successfully
         _posts.Clear();
         _postDeletes.Clear();
+        
         _postLikes.Clear();
+        _postLikeCounter.Clear();
         _postLikeDeletes.Clear();
+        _postLikeDeleteKeys.Clear();
+        
         _postQuotePosts.Clear();
         _postQuoteDeletes.Clear();
+        _postQuoteCounter.Clear();
+        
         _postReplies.Clear();
         _postReplyDeletes.Clear();
+        _postReplyCounter.Clear();
+        
         _postReposts.Clear();
         _postRepostDeletes.Clear();
+        _postRepostCounter.Clear();
+        _postRepostDeleteKeys.Clear();
 
         db.ChangeTracker.Clear();
 

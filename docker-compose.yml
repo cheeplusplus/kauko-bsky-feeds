@@ -59,5 +59,14 @@ services:
       - POSTGRES_USER=bskyfeed
       - POSTGRES_DB=bskyfeed
 
+  redis:
+    image: redis:8
+    restart: always
+    ports:
+      - 6379:6379
+    volumes:
+      - jetstream-redis:/data
+
 volumes:
   jetstream-psql:
+  jetstream-redis:

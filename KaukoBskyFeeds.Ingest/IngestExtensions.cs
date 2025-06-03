@@ -1,3 +1,4 @@
+using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
 using KaukoBskyFeeds.Ingest.Jetstream.Models.Records;
@@ -142,7 +143,7 @@ public static class IngestExtensions
         };
     }
 
-    public static string? GetSubjectDid(this JetstreamMessage message)
+    public static (string, string)? GetSubject(this JetstreamMessage message)
     {
         if (message.Commit?.Record is not IAppBskyFeedWithSubject fws)
         {
@@ -155,7 +156,35 @@ public static class IngestExtensions
             return null;
         }
 
-        return subjectDid;
+        return (subjectDid, subjectRkey);
+    }
+
+    public static string? GetSubjectDid(this JetstreamMessage message)
+    {
+        var subject = GetSubject(message);
+        return subject?.Item1;
+    }
+
+    public static string? GetSubjectRkey(this JetstreamMessage message)
+    {
+        var subject = GetSubject(message);
+        return subject?.Item2;
+    }
+
+    public static PostRecordRef? GetSubjectRef(this JetstreamMessage message)
+    {
+        var subj = GetSubject(message);
+        if (subj == null)
+        {
+            return null;
+        }
+        
+        return new PostRecordRef(subj.Value.Item1, subj.Value.Item2);
+    }
+
+    public static PostRecordRef? GetRef(this JetstreamMessage message)
+    {
+        return message.Commit == null ? null : new PostRecordRef(message.Did, message.Commit.RecordKey);
     }
 
     private static (string?, string?) GetPairFromAtUri(string uri)
