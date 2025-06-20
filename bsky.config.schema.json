@@ -99,19 +99,19 @@
                         ],
                         "oneOf": [
                             {
-                                "$ref": "#/definitions/FeedProcessorTimelineMinusList"
+                                "$ref": "#/definitions/FeedConfigTimelineAdvanced"
                             },
                             {
-                                "$ref": "#/definitions/FeedProcessorListImagesOnly"
+                                "$ref": "#/definitions/FeedConfigListImagesOnly"
                             },
                             {
-                                "$ref": "#/definitions/FeedProcessorBestArt"
+                                "$ref": "#/definitions/FeedConfigBestArt"
                             },
                             {
-                                "$ref": "#/definitions/FeedProcessorLikesImagesOnly"
+                                "$ref": "#/definitions/FeedConfigLikesImagesOnly"
                             },
                             {
-                                "$ref": "#/definitions/FeedProcessorPopularAmong"
+                                "$ref": "#/definitions/FeedConfigPopularAmong"
                             }
                         ]
                     },
@@ -159,33 +159,54 @@
             "type": "string",
             "pattern": "^at:\\/\\/did:plc:\\w+\/app\\.bsky\\.graph\\.list\/\\w+$"
         },
-        "FeedProcessorTimelineMinusList": {
+        "FeedConfigTimelineAdvanced": {
             "type": "object",
             "properties": {
                 "Type": {
                     "type": "string",
-                    "const": "TimelineMinusList"
+                    "const": "TimelineAdvanced"
                 },
                 "Config": {
                     "type": "object",
                     "properties": {
-                        "ListUri": {
-                            "description": "List URI used for filtering",
+                        "DataOrigin": {
+                            "description": "Where to get the initial ordered data from",
+                            "type": "string",
+                            "default": "Ingest",
+                            "enum": [
+                                "Api",
+                                "Ingest"
+                            ]
+                        },
+                        "TimelineStyle": {
+                            "description": "Which origin of timeline to build",
+                            "type": "string",
+                            "default": "Following",
+                            "enum": [
+                                "Following",
+                                "List"
+                            ]
+                        },
+                        "SourceList": {
+                            "description": "Source list to use when TimelineStyle is list",
                             "$ref": "#/definitions/atUriForList"
                         },
-                        "FetchTimeline": {
-                            "description": "Fetch the timeline instead of using the cache",
-                            "type": "boolean"
-                        },
-                        "AdditionalLists": {
-                            "description": "Additional lists to filter out",
+                        "SubtractLists": {
+                            "description": "List URI used for filtering out posts",
                             "type": "array",
                             "items": {
                                 "$ref": "#/definitions/atUriForList"
                             }
                         },
-                        "AlwaysShowListUser": {
+                        "AlwaysShowUser": {
                             "description": "List users to always show",
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/didDocument"
+                            }
+                        },
+                        "AlwaysShowUserReposts": {
+                            "description": "Users to always show reposts for",
                             "type": "array",
                             "items": {
                                 "$ref": "#/definitions/didDocument"
@@ -235,25 +256,28 @@
                             ]
                         },
                         "IncludeListMutuals": {
-                            "description": "Include posts from list from mutuals?",
+                            "description": "Include posts from SubtractLists by mutuals?",
                             "type": "boolean",
                             "default": false
-                        },
-                        "AlwaysShowUserReposts": {
-                            "description": "Always show reposts from these specific users",
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/didDocument"
-                            }
                         }
                     },
-                    "required": [
-                        "ListUri"
-                    ]
+                    "if": {
+                        "properties": {
+                            "TimelineStyle": {
+                                "const": "List"
+                            }
+                        },
+                        "required": ["TimelineStyle"]
+                    },
+                    "then": {
+                        "required": [
+                            "SourceList"
+                        ]
+                    }
                 }
             }
         },
-        "FeedProcessorListImagesOnly": {
+        "FeedConfigListImagesOnly": {
             "type": "object",
             "properties": {
                 "Type": {
@@ -274,7 +298,7 @@
                 }
             }
         },
-        "FeedProcessorBestArt": {
+        "FeedConfigBestArt": {
             "type": "object",
             "properties": {
                 "Type": {
@@ -308,7 +332,7 @@
                 }
             }
         },
-        "FeedProcessorLikesImagesOnly": {
+        "FeedConfigLikesImagesOnly": {
             "type": "object",
             "properties": {
                 "Type": {
@@ -326,7 +350,7 @@
                 }
             }
         },
-        "FeedProcessorPopularAmong": {
+        "FeedConfigPopularAmong": {
             "type": "object",
             "properties": {
                 "Type": {
@@ -340,7 +364,11 @@
                             "description": "Group to target popularity against",
                             "type": "string",
                             "default": "following",
-                            "enum": ["followers", "following", "mutuals"]
+                            "enum": [
+                                "followers",
+                                "following",
+                                "mutuals"
+                            ]
                         },
                         "MinRelevance": {
                             "description": "Number of unique users needed interacting to show a post",

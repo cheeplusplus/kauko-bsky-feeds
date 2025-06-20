@@ -3,15 +3,18 @@ using KaukoBskyFeeds.Shared;
 
 namespace KaukoBskyFeeds.Feeds.Config;
 
-public record TimelineMinusListFeedConfig(
+public record TimelineAdvancedFeedConfig(
     string DisplayName,
     string Description,
-    string ListUri,
     bool Install = false,
     bool RestrictToFeedOwner = false,
-    bool FetchTimeline = false,
-    List<string>? AdditionalLists = null,
-    List<string>? AlwaysShowListUser = null,
+    [property: JsonConverter(typeof(JsonStringEnumConverter<DataOriginSetting>))]
+        DataOriginSetting DataOrigin = DataOriginSetting.Ingest,
+    [property: JsonConverter(typeof(JsonStringEnumConverter<TimelineStyleSetting>))]
+        TimelineStyleSetting TimelineStyle = TimelineStyleSetting.Following,
+    string? SourceList = null,
+    List<string>? SubtractLists = null,
+    List<string>? AlwaysShowUser = null,
     List<string>? AlwaysShowUserReposts = null,
     List<string>? MuteUsers = null,
     bool ShowSelfPosts = true,
@@ -23,6 +26,18 @@ public record TimelineMinusListFeedConfig(
         ShowQuotePostsSetting ShowQuotePosts = ShowQuotePostsSetting.All,
     bool IncludeListMutuals = false
 ) : BaseFeedConfig(DisplayName, Description, RestrictToFeedOwner, Install);
+
+public enum DataOriginSetting
+{
+    Api,
+    Ingest,
+}
+
+public enum TimelineStyleSetting
+{
+    Following,
+    List,
+}
 
 public enum ShowRepostsSetting
 {

@@ -6,7 +6,6 @@ using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
-using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
@@ -14,10 +13,10 @@ using Post = KaukoBskyFeeds.Db.Models.Post;
 
 namespace KaukoBskyFeeds.Feeds;
 
-[BskyFeed(nameof(TimelineMinusList), typeof(TimelineMinusListFeedConfig))]
-public class TimelineMinusList(
-    ILogger<TimelineMinusList> logger,
-    TimelineMinusListFeedConfig feedConfig,
+[BskyFeed(nameof(TimelineAdvanced), typeof(TimelineAdvancedFeedConfig))]
+public class TimelineAdvanced(
+    ILogger<TimelineAdvanced> logger,
+    TimelineAdvancedFeedConfig feedConfig,
     FeedInstanceMetadata feedMeta,
     FeedDbContext db,
     IBskyApi api,
@@ -40,59 +39,112 @@ public class TimelineMinusList(
         var followingList = (await bsCache.GetFollowing(target, cancellationToken)).ToList();
         var followingListStr = followingList.Select(s => s.Handler);
         var mutualsDids = (await bsCache.GetMutuals(target, cancellationToken)).ToList();
-        var listMemberDids = await bsCache.GetListMembers(
-            new ATUri(feedConfig.ListUri),
-            cancellationToken
-        );
 
-        // Add any additional lists' members
-        if (feedConfig.AdditionalLists?.Count > 0)
+        var subtractDids = Enumerable.Empty<ATDid>();
+        if (feedConfig.SubtractLists?.Count > 0)
         {
-            foreach (var listUri in feedConfig.AdditionalLists)
+            foreach (var listUri in feedConfig.SubtractLists)
             {
-                var moreListMemberDids = await bsCache.GetListMembers(
+                var listMemberDids = await bsCache.GetListMembers(
                     new ATUri(listUri),
                     cancellationToken
                 );
-                listMemberDids = listMemberDids.Concat(moreListMemberDids);
+                subtractDids = subtractDids.Concat(listMemberDids);
             }
         }
 
-        var listMemberDidsList = listMemberDids.Distinct().ToList();
+        var subtractDidsDidsList = subtractDids.Distinct().ToList();
 
         List<Post> posts;
         string? newCursor = null;
-        if (feedConfig.FetchTimeline)
+        if (feedConfig.DataOrigin == DataOriginSetting.Api)
         {
-            var postTl = await api.GetTimeline(
-                cursor: cursor,
-                cancellationToken: cancellationToken
-            );
-            posts = (postTl?.Feed ?? [])
-                .Where(w =>
-                    ((feedConfig.AlwaysShowUserReposts?.Count ?? 0) > 0) || w.Reason == null
-                )
-                .Select(s => s.ToDbPost())
-                .ToList();
-            newCursor = postTl?.Cursor;
+            if (feedConfig.TimelineStyle == TimelineStyleSetting.Following)
+            {
+                var postTl = await api.GetTimeline(
+                    cursor: cursor,
+                    cancellationToken: cancellationToken
+                );
+                posts = (postTl?.Feed ?? [])
+                    .Where(w =>
+                        ((feedConfig.AlwaysShowUserReposts?.Count ?? 0) > 0) || w.Reason == null
+                    )
+                    .Select(s => s.ToDbPost())
+                    .ToList();
+                newCursor = postTl?.Cursor;
+            }
+            else
+            {
+                if (feedConfig.SourceList == null)
+                {
+                    throw new Exception("TimelineStyle is List but SourceList is null");
+                }
+
+                var postTl = await api.GetListFeed(
+                    ATUri.Create(feedConfig.SourceList),
+                    limit ?? 50,
+                    cursor,
+                    cancellationToken
+                );
+                posts = (postTl?.Feed ?? [])
+                    .OrderByDescending(o => o.Post.IndexedAt)
+                    .Where(w =>
+                        (feedConfig.AlwaysShowUserReposts?.Count ?? 0) > 0 || w.Reason == null
+                    )
+                    .Select(s => s.ToDbPost())
+                    .ToList();
+                newCursor = postTl?.Cursor;
+            }
         }
         else
         {
-            posts = await mCache.GetOrCreateAsync(
-                $"feed_db_{feedMeta.FeedUri}|{cursor}",
-                async (_) =>
+            if (feedConfig.TimelineStyle == TimelineStyleSetting.Following)
+            {
+                posts = await mCache.GetOrCreateAsync(
+                    $"feed_db_{feedMeta.FeedUri}|following|{cursor}",
+                    async (_) =>
+                    {
+                        return await db
+                            .Posts.LatestFromCursor(cursor)
+                            .Where(w => followingListStr.Contains(w.Did))
+                            // use a large limit - assume we need to fetch more than we're going to show
+                            .Take(100)
+                            .ToListAsync(cancellationToken);
+                    },
+                    BskyCache.QuickOpts,
+                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                    cancellationToken: cancellationToken
+                );
+            }
+            else
+            {
+                if (feedConfig.SourceList == null)
                 {
-                    return await db
-                        .Posts.LatestFromCursor(cursor)
-                        .Where(w => followingListStr.Contains(w.Did))
-                        // use a large limit - assume we need to fetch more than we're going to show
-                        .Take(100)
-                        .ToListAsync(cancellationToken);
-                },
-                BskyCache.QuickOpts,
-                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
-                cancellationToken: cancellationToken
-            );
+                    throw new Exception("TimelineStyle is List but SourceList is null");
+                }
+
+                var listMembers = await bsCache.GetListMembers(
+                    ATUri.Create(feedConfig.SourceList),
+                    cancellationToken
+                );
+                var listMembersStr = listMembers.Select(s => s.Handler);
+
+                posts = await mCache.GetOrCreateAsync(
+                    $"feed_db_{feedMeta.FeedUri}|list_{feedConfig.SourceList}|{cursor}",
+                    async (_) =>
+                    {
+                        return await db
+                            .Posts.LatestFromCursor(cursor)
+                            .Where(w => listMembersStr.Contains(w.Did))
+                            // use a large limit - assume we need to fetch more than we're going to show
+                            .Take(100)
+                            .ToListAsync(cancellationToken);
+                    },
+                    BskyCache.QuickOpts,
+                    tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                    cancellationToken: cancellationToken
+                );
+            }
         }
 
         if (posts.Count < 1 || cancellationToken.IsCancellationRequested)
@@ -106,7 +158,7 @@ public class TimelineMinusList(
             PostJudgement judgement;
             try
             {
-                judgement = JudgePost(s, target, followingList, mutualsDids, listMemberDidsList);
+                judgement = JudgePost(s, target, followingList, mutualsDids, subtractDidsDidsList);
             }
             catch (Exception ex)
             {
@@ -121,7 +173,7 @@ public class TimelineMinusList(
         // If we were sure all PostReposts had a Post, we could write a view to fetch them all at once and give a Reason to JudgePost again
         // But since that's not super performant atm we'll just do it manually at this step
         List<InFeedJudgedPost> judgedReposts = [];
-        if (!feedConfig.FetchTimeline && feedConfig.AlwaysShowUserReposts != null)
+        if (feedConfig is { DataOrigin: DataOriginSetting.Ingest, AlwaysShowUserReposts: not null })
         {
             // Find the most recent set of reposts
             var reposts = await db
@@ -185,7 +237,7 @@ public class TimelineMinusList(
             && (
                 !IsInList(did)
                 || IsMutual(did)
-                || (feedConfig.AlwaysShowListUser?.Contains(did.Handler) ?? true)
+                || (feedConfig.AlwaysShowUser?.Contains(did.Handler) ?? true)
             );
 
         var postAuthor = post.GetAuthorDid();
@@ -273,7 +325,7 @@ public class TimelineMinusList(
         // Target list
         if (IsInList(postAuthor))
         {
-            if (feedConfig.AlwaysShowListUser?.Contains(post.Did) ?? false)
+            if (feedConfig.AlwaysShowUser?.Contains(post.Did) ?? false)
             {
                 return new PostJudgement(PostType.InListAlwaysShow, !IsMuted(postAuthor));
             }

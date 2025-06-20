@@ -36,6 +36,7 @@ public interface IBskyApi
     Task<GetListFeedOutput?> GetListFeed(
         ATUri listUri,
         int? limit = null,
+        string? cursor = null,
         CancellationToken cancellationToken = default
     );
 
@@ -170,11 +171,12 @@ public class BskyApi(ATProtocol proto, BskyMetrics metrics) : IBskyApi
     public async Task<GetListFeedOutput?> GetListFeed(
         ATUri listUri,
         int? limit = null,
+        string? cursor = null,
         CancellationToken cancellationToken = default
     )
     {
         var r = await proto
-            .Feed.GetListFeedAsync(listUri, limit, cancellationToken: cancellationToken)
+            .Feed.GetListFeedAsync(listUri, limit, cursor, cancellationToken: cancellationToken)
             .Record(metrics, "app.bsky.feed.getListFeed");
         return r.HandleResult();
     }
