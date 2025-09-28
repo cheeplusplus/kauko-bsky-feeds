@@ -21,8 +21,8 @@ public class DevController(
     IConfiguration configuration,
     FeedRegistry feedRegistry,
     FeedDbContext dbContext,
-    IBskyApi api
-) : BskyControllerBase(configuration, api)
+    IBskyApi cApi
+) : BskyControllerBase(configuration, cApi)
 {
     private bool DevEndpointsEnabled =>
         env.IsDevelopment() || (BskyConfig.Web?.EnableDevEndpoints ?? false);
@@ -71,10 +71,10 @@ public class DevController(
             return TypedResults.Ok("Feed is empty.");
         }
 
-        var hydrated = await api.GetPosts(feedsInSize, cancellationToken);
+        var hydrated = await Api.GetPosts(feedsInSize, cancellationToken);
 
         Response.Headers.Append("X-Bsky-Cursor", feedSkel.Cursor);
-        return TypedResults.Json(hydrated, api.JsonSerializerOptions);
+        return TypedResults.Json(hydrated, Api.JsonSerializerOptions);
     }
 
     [HttpGet("status")]
@@ -133,13 +133,13 @@ public class DevController(
         await EnsureLogin(cancellationToken);
 
         var handled = ATHandle.Create(handle) ?? throw new Exception("Failed to create handle");
-        var resolvedDid = await api.ResolveHandle(handled, cancellationToken);
+        var resolvedDid = await Api.ResolveHandle(handled, cancellationToken);
         if (resolvedDid?.Did == null)
         {
             throw new Exception("Failed to resolve DID");
         }
-        var profile = await api.GetProfile(resolvedDid.Did, cancellationToken);
-        return TypedResults.Json(profile, api.JsonSerializerOptions);
+        var profile = await Api.GetProfile(resolvedDid.Did, cancellationToken);
+        return TypedResults.Json(profile, Api.JsonSerializerOptions);
     }
 
     [HttpGet("query/post")]
@@ -156,9 +156,9 @@ public class DevController(
         // Attempt login on first fetch
         await EnsureLogin(cancellationToken);
 
-        var postRes = await api.GetPosts([ATUri.Create(atUri)], cancellationToken);
+        var postRes = await Api.GetPosts([ATUri.Create(atUri)], cancellationToken);
         var post = postRes?.Posts.FirstOrDefault();
-        return TypedResults.Json(post, api.JsonSerializerOptions);
+        return TypedResults.Json(post, Api.JsonSerializerOptions);
     }
 
     [HttpGet("query/cached-post")]
@@ -223,7 +223,7 @@ public class DevController(
                 createdAt: DateTime.UtcNow
             );
 
-            var recordRef = await api.RepoPutRecord(
+            var recordRef = await Api.RepoPutRecord(
                 self,
                 BskyConstants.CollectionTypeFeedGenerator,
                 feed.FeedShortname,

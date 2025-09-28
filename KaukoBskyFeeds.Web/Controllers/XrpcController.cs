@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using FishyFlip;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -13,8 +12,8 @@ public class XrpcController(
     ILogger<XrpcController> logger,
     IConfiguration configuration,
     FeedRegistry feedRegistry,
-    IBskyApi api
-) : BskyControllerBase(configuration, api)
+    IBskyApi cApi
+) : BskyControllerBase(configuration, cApi)
 {
     [HttpGet("app.bsky.feed.getFeedSkeleton")]
     public async Task<
