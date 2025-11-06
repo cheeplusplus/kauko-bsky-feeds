@@ -5,6 +5,7 @@ using FishyFlip.Tools.Json;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace KaukoBskyFeeds.Shared.Bsky;
 
@@ -44,10 +45,19 @@ public static class BskyExtensions
     {
         if (redisConnectionString != null)
         {
+            collection.AddSingleton<IConnectionMultiplexer>(builder =>
+                ConnectionMultiplexer.Connect(redisConnectionString)
+            );
             collection.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnectionString;
             });
+
+            collection.AddScoped<IInteractionCache, RedisInteractionCache>();
+        }
+        else
+        {
+            collection.AddScoped<IInteractionCache, MemoryInteractionCache>();
         }
 
         collection.AddKeyedSingleton<JsonSerializerOptions>(

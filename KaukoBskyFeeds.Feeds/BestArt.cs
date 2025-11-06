@@ -13,21 +13,20 @@ using Microsoft.Extensions.Caching.Hybrid;
 
 namespace KaukoBskyFeeds.Feeds;
 
-[BskyFeed(nameof(BestArt), typeof(BestArtFeedConfig))]
+[BskyFeed(nameof(BestArt), typeof(BestArtFeedConfig), true)]
 public class BestArt(
     BestArtFeedConfig feedConfig,
     FeedInstanceMetadata feedMeta,
     FeedDbContext db,
     HybridCache mCache,
-    IBskyCache bsCache
-) : IFeed
+    IBskyCache bsCache,
+    IInteractionCache iaCache
+) : BaseFeed(feedMeta.FeedUri, feedConfig)
 {
     private int FeedLimit => feedConfig.FeedLimit;
     private int MinInteractions => feedConfig.MinInteractions;
 
-    public BaseFeedConfig Config => feedConfig;
-
-    public async Task<CustomSkeletonFeed> GetFeedSkeleton(
+    public override async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
         int? limit,
         string? cursor,
@@ -55,7 +54,7 @@ public class BestArt(
                     .Where(w =>
                         w.ImageCount > 0
                         && (w.LikeCount + w.QuotePostCount + w.ReplyCount + w.RepostCount)
-                            >= MinInteractions
+                        >= MinInteractions
                     )
                     .OrderByDescending(o =>
                         o.LikeCount + o.QuotePostCount + o.ReplyCount + o.RepostCount
@@ -73,6 +72,18 @@ public class BestArt(
             // Exit early
             return new CustomSkeletonFeed([], null);
         }
+
+        List<string> skipPosts = [];
+        if (requestor != null)
+        {
+            var opinions = await iaCache.GetInteractions(feedMeta.FeedUri, requestor);
+            skipPosts = opinions
+                .Where(kvp => kvp.Value.Contains(BskyConstants.InteractionRequestLess))
+                .Select(kvp => kvp.Key)
+                .ToList();
+        }
+
+        finalPostList = finalPostList.Where(s => !skipPosts.Contains(s.ToUri())).ToList();
 
         IEnumerable<SortedFeedResult> sortedFeed;
         if (feedConfig.BalanceInteractions ?? false)
@@ -110,7 +121,10 @@ public class BestArt(
         }
 
         var feedOutput = sortedFeed
-            .Select(s => new SkeletonFeedPost(s.Post.ToAtUri(), feedContext: $"Score: {s.Score}"))
+            .Select(s => new SkeletonFeedPost(
+                s.Post.ToAtUri(),
+                feedContext: this.GetStandardFeedContext($"Score: {s.Score}")
+            ))
             .ToList();
 
         return new CustomSkeletonFeed(feedOutput, null);

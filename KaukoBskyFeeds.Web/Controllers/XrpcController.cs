@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using FishyFlip.Lexicon.App.Bsky.Feed;
+using FishyFlip.Models;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -15,7 +17,7 @@ public class XrpcController(
     IBskyApi cApi
 ) : BskyControllerBase(configuration, cApi)
 {
-    [HttpGet("app.bsky.feed.getFeedSkeleton")]
+    [HttpGet(BskyConstants.XrpcGetFeedSkeleton)]
     public async Task<
         Results<NotFound, UnauthorizedHttpResult, JsonHttpResult<CustomSkeletonFeed>>
     > GetFeedSkeleton(
@@ -38,7 +40,7 @@ public class XrpcController(
 
         var requestingDid = BskyAuth.GetDidFromAuthHeader(
             authorization,
-            "app.bsky.feed.getFeedSkeleton",
+            BskyConstants.XrpcGetFeedSkeleton,
             BskyConfig.Identity.ServiceDid
         );
 
@@ -74,6 +76,77 @@ public class XrpcController(
             // The PDS expects a 401 in this case
             return TypedResults.Unauthorized();
         }
+    }
+
+    [HttpPost(BskyConstants.XrpcSendInteractions)]
+    public async Task<Results<Ok, UnauthorizedHttpResult>> SendInteractions(
+        CustomSendInteractions input,
+        [FromServices] IInteractionCache interactionCache,
+        [FromHeader] string? authorization
+    )
+    {
+        var requestingDid = BskyAuth.GetDidFromAuthHeader(
+            authorization,
+            BskyConstants.XrpcSendInteractions,
+            BskyConfig.Identity.ServiceDid
+        );
+        if (requestingDid == null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        foreach (var interaction in input.Interactions)
+        {
+            if (interaction.Event == BskyConstants.InteractionSeen)
+            {
+                // Don't record seen events
+                continue;
+            }
+
+            var stdFeedCtx = StandardFeedContext.Deserialize(interaction.FeedContext);
+            if (stdFeedCtx == null)
+            {
+                logger.LogWarning(
+                    "Failed to deserialize a StandardFeedContext: {ctx}",
+                    interaction.FeedContext
+                );
+                continue;
+            }
+
+            // We should be validating the feed and that it has interactions turned on..
+            // but since this call is authenticated it's probably not a big deal for now
+            var feed = stdFeedCtx.FeedUri;
+            if (!ATUri.TryCreate(feed, out var feedAtUri))
+            {
+                continue;
+            }
+
+            logger.LogInformation(
+                "{requestingDid} sent interaction to feed {feed}: {interaction}",
+                requestingDid,
+                feed,
+                interaction.Event
+            );
+
+            if (interaction.Item == null || interaction.Event == null)
+            {
+                continue;
+            }
+
+            if (!ATUri.TryCreate(interaction.Item, out var itemAtUri))
+            {
+                continue;
+            }
+
+            await interactionCache.RecordInteraction(
+                feedAtUri,
+                requestingDid,
+                itemAtUri,
+                interaction.Event
+            );
+        }
+
+        return TypedResults.Ok();
     }
 
     [HttpGet("app.bsky.feed.describeFeedGenerator")]

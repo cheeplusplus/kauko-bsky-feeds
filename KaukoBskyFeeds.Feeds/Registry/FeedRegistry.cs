@@ -19,11 +19,14 @@ public class FeedRegistry
             ?? throw new Exception("Missing configuration");
 
         // Collect all feed classes from the assembly
-        Dictionary<string, (Type, Type)> feedTypes = this.GetType()
+        Dictionary<string, (Type, Type, bool)> feedTypes = this.GetType()
             .Assembly.GetTypes()
             .Select(s => new { CType = s, CAttr = s.GetCustomAttribute<BskyFeedAttribute>() })
             .Where(w => w.CAttr != null)
-            .ToDictionary(k => k.CAttr!.Name, v => (v.CType, v.CAttr!.ConfigType));
+            .ToDictionary(
+                k => k.CAttr!.Name,
+                v => (v.CType, v.CAttr!.ConfigType, v.CAttr!.SupportsInteraction)
+            );
 
         // Combine configurations
         _feeds = bskyConfig
@@ -36,7 +39,8 @@ public class FeedRegistry
                     ?? throw new Exception("Failed to parse feed configuration of " + feedCfg.Key),
                 feedCfg.Value.Config,
                 feedCfg.Key,
-                $"{bskyConfig.Identity.PublishedAtUri}/{BskyConstants.CollectionTypeFeedGenerator}/{feedCfg.Key}"
+                $"{bskyConfig.Identity.PublishedAtUri}/{BskyConstants.CollectionTypeFeedGenerator}/{feedCfg.Key}",
+                feedTypes[feedCfg.Value.Type].Item3
             ))
             .ToList();
     }
@@ -74,6 +78,7 @@ public class FeedRegistry
         object FeedConfig,
         BaseFeedConfig FeedBaseConfig,
         string FeedShortname,
-        string FeedUri
+        string FeedUri,
+        bool FeedAcceptsInteractions
     );
 }

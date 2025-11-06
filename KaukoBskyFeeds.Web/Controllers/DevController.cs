@@ -220,6 +220,7 @@ public class DevController(
                 ATDid.Create(BskyConfig.Identity.ServiceDid),
                 feed.FeedBaseConfig.DisplayName,
                 feed.FeedBaseConfig.Description,
+                acceptsInteractions: feed.FeedAcceptsInteractions,
                 createdAt: DateTime.UtcNow
             );
 
