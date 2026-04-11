@@ -23,6 +23,7 @@ builder.Services.AddSingleton(f =>
 // builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerNativeWs>();
 builder.Services.AddScoped<IJetstreamConsumer, JetstreamConsumerWSC>();
 builder.Services.AddHybridCache();
+builder.Services.AddSingleton<IBskyApi, BskyApi>();
 builder.Services.AddSingleton<BskyCache>();
 builder.Services.AddSingleton<BskyMetrics>();
 builder.Services.AddSingleton<JetstreamMetrics>();

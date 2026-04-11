@@ -118,7 +118,7 @@ public record LofiReport(PostView Post, PostView? ReplyParentPost, PostView? Rep
                 );
                 Console.Write(string.Join(" > ", imgLabels));
             }
-            else if (Post.Embed is ViewRecordDef { Record: PostView recordEmbedPost })
+            else if (Post.Embed is ViewRecordDef { Record: ViewRecord recordEmbedPost })
             {
                 var embedUrl = LofiUtils.AtUriToBskyUrl(
                     recordEmbedPost.Uri,
