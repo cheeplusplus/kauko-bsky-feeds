@@ -17,6 +17,7 @@ public interface IJetstreamConsumer
         CancellationToken cancellationToken = default
     );
     Task Stop();
+    public bool LogDeserializationErrors { get; set; }
 }
 
 public abstract class BaseJetstreamConsumer : IJetstreamConsumer
@@ -35,6 +36,8 @@ public abstract class BaseJetstreamConsumer : IJetstreamConsumer
         BskyConstants.CollectionTypeRepost,
     ];
     private const int REPLAY_WINDOW_MS = 3000;
+
+    public bool LogDeserializationErrors { get; set; } = false;
 
     private readonly Channel<JetstreamMessage> _channel = Channel.CreateBounded<JetstreamMessage>(
         10

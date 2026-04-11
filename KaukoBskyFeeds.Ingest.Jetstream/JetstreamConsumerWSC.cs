@@ -160,7 +160,11 @@ public class JetstreamConsumerWSC(ILogger<JetstreamConsumerWSC> logger, Jetstrea
             }
             catch (JsonException je)
             {
-                logger.LogError(je, "Failed to deserialize JSON: {json}", serializedStr);
+                if (LogDeserializationErrors)
+                {
+                    logger.LogError(je, "Failed to deserialize JSON: {json}", serializedStr);
+                }
+
                 metrics.SawEventParseError(je.GetType().Name);
             }
         }

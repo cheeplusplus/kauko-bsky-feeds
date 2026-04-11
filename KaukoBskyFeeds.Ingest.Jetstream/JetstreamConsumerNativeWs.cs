@@ -138,7 +138,11 @@ public class JetstreamConsumerNativeWs(
             }
             catch (JsonException jex)
             {
-                logger.LogError(jex, "JSON deserialization error");
+                if (LogDeserializationErrors)
+                {
+                    logger.LogError(jex, "JSON deserialization error");
+                }
+
                 metrics.SawEventParseError(jex.GetType().Name);
 
                 try
