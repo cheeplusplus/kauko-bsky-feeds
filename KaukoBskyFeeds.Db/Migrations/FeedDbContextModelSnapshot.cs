@@ -18,7 +18,7 @@ namespace KaukoBskyFeeds.Db.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.4")
+                .HasAnnotation("ProductVersion", "9.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -65,8 +65,14 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.HasKey("Did", "Rkey");
 
+                    b.HasIndex("CreatedAt")
+                        .IsDescending();
+
                     b.HasIndex("EventTime")
                         .IsDescending();
+
+                    b.HasIndex("Did", "CreatedAt")
+                        .IsDescending(false, true);
 
                     b.HasIndex("Did", "EventTime")
                         .IsDescending(false, true);
@@ -81,6 +87,9 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.Property<string>("LikeRkey")
                         .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("EventTime")
                         .HasColumnType("timestamp with time zone");
@@ -98,6 +107,9 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.HasKey("LikeDid", "LikeRkey");
 
+                    b.HasIndex("CreatedAt")
+                        .IsDescending();
+
                     b.HasIndex("EventTime")
                         .IsDescending();
 
@@ -113,6 +125,9 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.Property<string>("QuoteRkey")
                         .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("EventTime")
                         .HasColumnType("timestamp with time zone");
@@ -130,6 +145,9 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.HasKey("QuoteDid", "QuoteRkey");
 
+                    b.HasIndex("CreatedAt")
+                        .IsDescending();
+
                     b.HasIndex("EventTime")
                         .IsDescending();
 
@@ -145,6 +163,9 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.Property<string>("ReplyRkey")
                         .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("EventTime")
                         .HasColumnType("timestamp with time zone");
@@ -162,6 +183,9 @@ namespace KaukoBskyFeeds.Db.Migrations
 
                     b.HasKey("ReplyDid", "ReplyRkey");
 
+                    b.HasIndex("CreatedAt")
+                        .IsDescending();
+
                     b.HasIndex("EventTime")
                         .IsDescending();
 
@@ -178,6 +202,9 @@ namespace KaukoBskyFeeds.Db.Migrations
                     b.Property<string>("RepostRkey")
                         .HasColumnType("text");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("EventTime")
                         .HasColumnType("timestamp with time zone");
 
@@ -193,6 +220,9 @@ namespace KaukoBskyFeeds.Db.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("RepostDid", "RepostRkey");
+
+                    b.HasIndex("CreatedAt")
+                        .IsDescending();
 
                     b.HasIndex("EventTime")
                         .IsDescending();

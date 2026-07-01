@@ -32,10 +32,10 @@ public static class PostExtensions
             cursorPosition = cursorAsDate;
         }
 
-        IQueryable<T> q = postTable.OrderByDescending(o => o.EventTime);
+        IQueryable<T> q = postTable.OrderByDescending(o => o.CreatedAt);
         if (cursorPosition != null)
         {
-            q = q.Where(w => w.EventTime < cursorPosition);
+            q = q.Where(w => w.CreatedAt < cursorPosition);
         }
 
         return q;
@@ -43,7 +43,7 @@ public static class PostExtensions
 
     public static string GetCursor(this IPostRecord post)
     {
-        return AsCursor(post.EventTime);
+        return AsCursor(post.CreatedAt);
     }
 
     public static string AsCursor(this DateTime dt)

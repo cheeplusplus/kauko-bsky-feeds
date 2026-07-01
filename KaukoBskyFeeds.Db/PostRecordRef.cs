@@ -4,6 +4,7 @@ public interface IPostRecord
 {
     PostRecordRef Ref { get; }
     DateTime EventTime { get; }
+    DateTime CreatedAt { get; }
     long EventTimeUs { get; }
 }
 

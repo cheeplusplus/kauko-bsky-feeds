@@ -114,7 +114,7 @@ public class TimelineMinusList(
                 judgement = new PostJudgement(PostType.ErrorState, false);
             }
 
-            return new InFeedJudgedPost(judgement, s.ToAtUri(), s.EventTime);
+            return new InFeedJudgedPost(judgement, s.ToAtUri(), s.CreatedAt);
         });
 
         // We're doing this after judgement because at the moment, we're not reliably able to combine posts and reposts
@@ -127,7 +127,7 @@ public class TimelineMinusList(
             var reposts = await db
                 .PostReposts.LatestFromCursor(cursor)
                 .Where(w => feedConfig.AlwaysShowUserReposts.Contains(w.RepostDid))
-                .OrderByDescending(o => o.EventTime)
+                .OrderByDescending(o => o.CreatedAt)
                 .Take(limit ?? 50)
                 .ToListAsync(cancellationToken);
             judgedReposts = reposts
@@ -138,7 +138,7 @@ public class TimelineMinusList(
                         RepostReason: new SkeletonReasonRepost(s.ToAtUri())
                     ),
                     s.ToParentPostAtUri(),
-                    s.EventTime
+                    s.CreatedAt
                 ))
                 .ToList();
         }

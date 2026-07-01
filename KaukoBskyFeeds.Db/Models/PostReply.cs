@@ -7,6 +7,7 @@ namespace KaukoBskyFeeds.Db.Models;
 [PrimaryKey(nameof(ReplyDid), nameof(ReplyRkey))]
 [Index(nameof(ParentDid), nameof(ParentRkey))]
 [Index(nameof(EventTime), AllDescending = true)]
+[Index(nameof(CreatedAt), AllDescending = true)]
 public class PostReply : IPostInteraction
 {
     [Required]
@@ -26,6 +27,9 @@ public class PostReply : IPostInteraction
 
     [Required]
     public long EventTimeUs { get; set; }
+    
+    [Required]
+    public DateTime CreatedAt { get; set; }
 
     [NotMapped]
     public PostRecordRef Ref => new(ReplyDid, ReplyRkey);

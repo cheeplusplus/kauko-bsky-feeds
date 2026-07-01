@@ -57,6 +57,7 @@ public static class IngestExtensions
             ParentRkey = subjectRkey,
             EventTime = message.MessageTime.AsUtc(),
             EventTimeUs = message.TimeMicroseconds,
+            CreatedAt = like.CreatedAt.AsUtc(),
         };
     }
 
@@ -91,6 +92,7 @@ public static class IngestExtensions
             ParentRkey = subjectRkey,
             EventTime = message.MessageTime.AsUtc(),
             EventTimeUs = message.TimeMicroseconds,
+            CreatedAt = post.CreatedAt.AsUtc(),
         };
     }
 
@@ -115,6 +117,7 @@ public static class IngestExtensions
             ParentRkey = subjectRkey,
             EventTime = message.MessageTime.AsUtc(),
             EventTimeUs = message.TimeMicroseconds,
+            CreatedAt = post.CreatedAt.AsUtc(),
         };
     }
 
@@ -139,6 +142,7 @@ public static class IngestExtensions
             ParentRkey = subjectRkey,
             EventTime = message.MessageTime.AsUtc(),
             EventTimeUs = message.TimeMicroseconds,
+            CreatedAt = repost.CreatedAt.AsUtc(),
         };
     }
 

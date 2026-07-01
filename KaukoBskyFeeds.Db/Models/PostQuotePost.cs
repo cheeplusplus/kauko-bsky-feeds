@@ -7,6 +7,7 @@ namespace KaukoBskyFeeds.Db.Models;
 [PrimaryKey(nameof(QuoteDid), nameof(QuoteRkey))]
 [Index(nameof(ParentDid), nameof(ParentRkey))]
 [Index(nameof(EventTime), AllDescending = true)]
+[Index(nameof(CreatedAt), AllDescending = true)]
 public class PostQuotePost : IPostInteraction
 {
     [Required]
@@ -26,6 +27,9 @@ public class PostQuotePost : IPostInteraction
 
     [Required]
     public long EventTimeUs { get; set; }
+    
+    [Required]
+    public DateTime CreatedAt { get; set; }
 
     [NotMapped]
     public PostRecordRef Ref => new(QuoteDid, QuoteRkey);
