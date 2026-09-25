@@ -6,8 +6,8 @@
     <RootNamespace>KaukoBskyFeeds.Db</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="EFCore.BulkExtensions.PostgreSql" Version="9.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.2">
+    <PackageReference Include="EFCore.BulkExtensions.PostgreSql" Version="9.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.9">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>

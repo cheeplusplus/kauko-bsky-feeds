@@ -25,10 +25,7 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
     var connStr = builder.Configuration.GetConnectionString("psqldb");
     options.UseNpgsql(
         connStr,
-        opts =>
-        {
-            opts.CommandTimeout(300);
-        }
+        opts => { opts.CommandTimeout(300); }
     );
 
     // db.EnableSensitiveDataLogging();
@@ -58,13 +55,21 @@ builder
     .WithMetrics(b =>
         b.AddPrometheusHttpListener(options =>
             {
-                var uriPrefix = builder.Configuration.GetValue<string>(
-                    "IngestConfig:MetricsUriPrefix"
-                );
-                if (uriPrefix != null)
+                options.ConfigureHttpListener = (_, httpListener) =>
                 {
-                    options.UriPrefixes = [uriPrefix];
-                }
+                    var uriPrefix = builder.Configuration.GetValue<string>(
+                        "IngestConfig:MetricsUriPrefix"
+                    );
+                    if (uriPrefix != null)
+                    {
+                        if (!uriPrefix.EndsWith('/'))
+                        {
+                            uriPrefix += "/";
+                        }
+
+                        httpListener.Prefixes.Add(uriPrefix);
+                    }
+                };
             })
             .AddMeter(
                 "System.Net.Http",
