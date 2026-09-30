@@ -4,9 +4,7 @@ using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
-using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
-using KaukoBskyFeeds.Shared.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
@@ -14,7 +12,7 @@ using Post = KaukoBskyFeeds.Db.Models.Post;
 
 namespace KaukoBskyFeeds.Feeds;
 
-[BskyFeed(nameof(TimelineMinusList), typeof(TimelineMinusListFeedConfig))]
+[BskyFeed(nameof(TimelineMinusList), typeof(TimelineMinusListFeedConfig), true)]
 public class TimelineMinusList(
     ILogger<TimelineMinusList> logger,
     TimelineMinusListFeedConfig feedConfig,
@@ -22,12 +20,11 @@ public class TimelineMinusList(
     FeedDbContext db,
     IBskyApi api,
     HybridCache mCache,
-    IBskyCache bsCache
-) : IFeed
+    IBskyCache bsCache,
+    IInteractionCache iaCache
+) : BaseFeed(feedMeta.FeedUri, feedConfig)
 {
-    public BaseFeedConfig Config => feedConfig;
-
-    public async Task<CustomSkeletonFeed> GetFeedSkeleton(
+    public override async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
         int? limit,
         string? cursor,
@@ -143,8 +140,19 @@ public class TimelineMinusList(
                 .ToList();
         }
 
+        List<string> skipPosts = [];
+        if (requestor != null)
+        {
+            var opinions = await iaCache.GetInteractions(feedMeta.FeedUri, requestor);
+            skipPosts = opinions
+                .Where(kvp => kvp.Value.Contains(BskyConstants.InteractionRequestLess))
+                .Select(kvp => kvp.Key)
+                .ToList();
+        }
+
         var filteredFeed = judgedFeed
             .Concat(judgedReposts)
+            .Where(w => !skipPosts.Contains(w.PostUri.ToString()))
             .Where(w => w.Judgement.ShouldShow)
             .OrderByDescending(o => o.Cursor)
             .Take(limit ?? 50)
@@ -153,7 +161,7 @@ public class TimelineMinusList(
             .Select(s => new SkeletonFeedPost(
                 s.PostUri,
                 s.Judgement.RepostReason,
-                $"Reason: {s.Judgement.Type}"
+                feedContext: this.GetStandardFeedContext($"Reason: {s.Judgement.Type}")
             ))
             .ToList();
 

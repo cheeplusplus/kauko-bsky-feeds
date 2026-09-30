@@ -1,31 +1,28 @@
-﻿using FishyFlip;
-using FishyFlip.Lexicon.App.Bsky.Embed;
+﻿using FishyFlip.Lexicon.App.Bsky.Embed;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
-using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 
 namespace KaukoBskyFeeds.Feeds;
 
-[BskyFeed(nameof(PopularAmong), typeof(PopularAmongFeedConfig))]
+[BskyFeed(nameof(PopularAmong), typeof(PopularAmongFeedConfig), true)]
 public class PopularAmong(
     PopularAmongFeedConfig feedConfig,
     FeedInstanceMetadata feedMeta,
     FeedDbContext db,
     IBskyApi api,
     HybridCache mCache,
-    IBskyCache bsCache
-) : IFeed
+    IBskyCache bsCache,
+    IInteractionCache iaCache
+) : BaseFeed(feedMeta.FeedUri, feedConfig)
 {
-    public BaseFeedConfig Config => feedConfig;
-
-    public async Task<CustomSkeletonFeed> GetFeedSkeleton(
+    public override async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
         int? limit,
         string? cursor,
@@ -49,7 +46,7 @@ public class PopularAmong(
             _ => throw new Exception("Invalid target group"),
         };
         var targetListStr = targetDids.Select(s => s.Handler).ToList();
-
+        
         var allInteractions = await mCache.GetOrCreateAsync(
             $"feed_db_{feedMeta.FeedUri}",
             async (_) =>
@@ -144,9 +141,20 @@ public class PopularAmong(
                 .ToList();
         }
 
+        List<string> skipPosts = [];
+        if (requestor != null)
+        {
+            var opinions = await iaCache.GetInteractions(feedMeta.FeedUri, requestor);
+            skipPosts = opinions
+                .Where(kvp => kvp.Value.Contains(BskyConstants.InteractionRequestLess))
+                .Select(kvp => kvp.Key)
+                .ToList();
+        }
+        
         var filteredFeed = allInteractionsUseful
+            .Where(w => !skipPosts.Contains(w.PostUri.ToString()))
             .OrderByDescending(o => o.Count)
-            .Select(s => new SkeletonFeedPost(s.PostUri, feedContext: $"{s.Count} interactions"));
+            .Select(s => new SkeletonFeedPost(s.PostUri, feedContext: this.GetStandardFeedContext($"{s.Count} interactions")));
 
         return new CustomSkeletonFeed(filteredFeed.ToList(), null);
     }
