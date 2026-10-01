@@ -335,7 +335,10 @@ public partial class JetstreamWorker(
             var count5 = await db
                 .PostReposts.Where(s => s.EventTime < threeDaysAgo)
                 .ExecuteDeleteAsync(cancellationToken);
-            var count = count1 + count2 + count3 + count4 + count5;
+            var count6 = await db
+                .FeedInteractions.Where(s => s.EventTime < threeDaysAgo)
+                .ExecuteDeleteAsync(cancellationToken);
+            var count = count1 + count2 + count3 + count4 + count5 + count6;
 
             await transaction.CommitAsync(cancellationToken);
 

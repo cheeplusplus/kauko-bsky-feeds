@@ -23,6 +23,29 @@ namespace KaukoBskyFeeds.Db.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("KaukoBskyFeeds.Db.Models.FeedInteraction", b =>
+                {
+                    b.Property<string>("FeedUri")
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserDid")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ItemUri")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("EventTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Interaction")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("FeedUri", "UserDid", "ItemUri");
+
+                    b.ToTable("FeedInteractions");
+                });
+
             modelBuilder.Entity("KaukoBskyFeeds.Db.Models.Post", b =>
                 {
                     b.Property<string>("Did")

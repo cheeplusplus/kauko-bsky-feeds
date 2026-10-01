@@ -11,6 +11,7 @@ public class FeedDbContext(DbContextOptions<FeedDbContext> options) : DbContext(
     public required DbSet<PostReply> PostReplies { get; set; }
     public required DbSet<PostRepost> PostReposts { get; set; }
     public required DbSet<PostWithInteractions> PostsWithInteractions { get; set; }
+    public required DbSet<FeedInteraction> FeedInteractions { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder options) { }
 

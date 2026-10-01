@@ -5,6 +5,7 @@ using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
+using KaukoBskyFeeds.Interactions;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
@@ -46,7 +47,7 @@ public class PopularAmong(
             _ => throw new Exception("Invalid target group"),
         };
         var targetListStr = targetDids.Select(s => s.Handler).ToList();
-        
+
         var allInteractions = await mCache.GetOrCreateAsync(
             $"feed_db_{feedMeta.FeedUri}",
             async (_) =>
@@ -150,11 +151,14 @@ public class PopularAmong(
                 .Select(kvp => kvp.Key)
                 .ToList();
         }
-        
+
         var filteredFeed = allInteractionsUseful
             .Where(w => !skipPosts.Contains(w.PostUri.ToString()))
             .OrderByDescending(o => o.Count)
-            .Select(s => new SkeletonFeedPost(s.PostUri, feedContext: this.GetStandardFeedContext($"{s.Count} interactions")));
+            .Select(s => new SkeletonFeedPost(
+                s.PostUri,
+                feedContext: this.GetStandardFeedContext($"{s.Count} interactions")
+            ));
 
         return new CustomSkeletonFeed(filteredFeed.ToList(), null);
     }

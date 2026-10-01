@@ -1,5 +1,6 @@
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Registry;
+using KaukoBskyFeeds.Interactions;
 using KaukoBskyFeeds.Shared;
 using KaukoBskyFeeds.Shared.Bsky;
 using KaukoBskyFeeds.Shared.Metrics;
@@ -30,6 +31,7 @@ builder.Services.AddDbContext<FeedDbContext>(options =>
     );
 });
 builder.Services.AddBskyServices(builder.Configuration.GetConnectionString("redis"));
+builder.Services.AddFeedInteractionServices(InteractionStorageProvider.Database);
 builder.Services.AddSingleton<FeedRegistry>();
 
 builder.Services.AddHealthChecks();

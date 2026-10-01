@@ -29,6 +29,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KaukoBskyFeeds.Shared\KaukoBskyFeeds.Shared.csproj" />
     <ProjectReference Include="..\KaukoBskyFeeds.Feeds\KaukoBskyFeeds.Feeds.csproj" />
+    <ProjectReference Include="..\KaukoBskyFeeds.Interactions\KaukoBskyFeeds.Interactions.csproj" />
   </ItemGroup>
 
 </Project>

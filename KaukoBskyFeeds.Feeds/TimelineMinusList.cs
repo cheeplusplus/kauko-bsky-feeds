@@ -4,6 +4,7 @@ using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
+using KaukoBskyFeeds.Interactions;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;

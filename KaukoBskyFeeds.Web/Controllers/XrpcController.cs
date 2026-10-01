@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
 using KaukoBskyFeeds.Feeds.Registry;
+using KaukoBskyFeeds.Interactions;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -95,6 +96,8 @@ public class XrpcController(
             return TypedResults.Unauthorized();
         }
 
+        var interactionEvents = new List<FeedInteractionEvent>();
+
         foreach (var interaction in input.Interactions)
         {
             if (interaction.Event == BskyConstants.InteractionSeen)
@@ -103,7 +106,22 @@ public class XrpcController(
                 continue;
             }
 
-            var stdFeedCtx = StandardFeedContext.Deserialize(interaction.FeedContext);
+            StandardFeedContext? stdFeedCtx;
+            try
+            {
+                stdFeedCtx = StandardFeedContext.Deserialize(interaction.FeedContext);
+            }
+            catch (Exception ex)
+            {
+                // This is most likely to happen if we forgot to use it when making a feed
+                logger.LogWarning(
+                    ex,
+                    "Failed to deserialize a StandardFeedContext: {ctx}",
+                    interaction.FeedContext
+                );
+                continue;
+            }
+
             if (stdFeedCtx == null)
             {
                 logger.LogWarning(
@@ -138,12 +156,14 @@ public class XrpcController(
                 continue;
             }
 
-            await interactionCache.RecordInteraction(
-                feedAtUri,
-                requestingDid,
-                itemAtUri,
-                interaction.Event
+            interactionEvents.Add(
+                new FeedInteractionEvent(feedAtUri, requestingDid, itemAtUri, interaction.Event)
             );
+        }
+
+        if (interactionEvents.Count > 0)
+        {
+            await interactionCache.RecordInteractions(interactionEvents);
         }
 
         return TypedResults.Ok();

@@ -6,6 +6,7 @@ using KaukoBskyFeeds.Db.Models;
 using KaukoBskyFeeds.Feeds.Config;
 using KaukoBskyFeeds.Feeds.Registry;
 using KaukoBskyFeeds.Feeds.Utils;
+using KaukoBskyFeeds.Interactions;
 using KaukoBskyFeeds.Shared.Bsky;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
@@ -53,7 +54,7 @@ public class BestArt(
                     .Where(w =>
                         w.ImageCount > 0
                         && (w.LikeCount + w.QuotePostCount + w.ReplyCount + w.RepostCount)
-                        >= MinInteractions
+                            >= MinInteractions
                     )
                     .OrderByDescending(o =>
                         o.LikeCount + o.QuotePostCount + o.ReplyCount + o.RepostCount

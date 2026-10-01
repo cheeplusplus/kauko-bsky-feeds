@@ -16,7 +16,7 @@ public delegate Task<(IEnumerable<T>?, string?)> BskyPageableList<T>(
 
 public static class BskyExtensions
 {
-    // copied from https://github.com/drasticactions/FishyFlip/blob/825143dc1b4370f9749ab23f3074e207adc63eea/src/FishyFlip/Lexicon/SourceGenerationContext.g.cs#L13
+    // copied from https://github.com/drasticcactions/FishyFlip/blob/825143dc1b4370f9749ab23f3074e207adc63eea/src/FishyFlip/Lexicon/SourceGenerationContext.g.cs#L13
     // _proto.Proto.Options.JsonSerializerOptions would work if we weren't using any custom types
     public static readonly JsonSerializerOptions BskyJso = new()
     {
@@ -52,12 +52,6 @@ public static class BskyExtensions
             {
                 options.Configuration = redisConnectionString;
             });
-
-            collection.AddScoped<IInteractionCache, RedisInteractionCache>();
-        }
-        else
-        {
-            collection.AddScoped<IInteractionCache, MemoryInteractionCache>();
         }
 
         collection.AddKeyedSingleton<JsonSerializerOptions>(
