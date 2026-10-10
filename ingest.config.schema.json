@@ -64,6 +64,10 @@
                 "MetricsUriPrefix": {
                     "type": "string",
                     "format": "uri"
+                },
+                "InflowRatePerSec": {
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         }

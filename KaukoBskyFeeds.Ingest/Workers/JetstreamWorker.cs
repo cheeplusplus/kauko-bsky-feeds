@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using FishyFlip;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Ingest.Jetstream;
@@ -219,8 +220,19 @@ public partial class JetstreamWorker(
         );
     }
 
-    private async void ReadChannel(CancellationToken cancellationToken)
+    private async Task ReadChannel(CancellationToken cancellationToken)
     {
+        var permitLimit = _ingestConfig.InflowRatePerSec ?? 0;
+        await using var rateLimiter = new FixedWindowRateLimiter(
+            new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = permitLimit > 0 ? permitLimit : int.MaxValue,
+                Window = TimeSpan.FromSeconds(1),
+                QueueLimit = 10, // we aren't multiprocessing here
+            }
+        );
+
         try
         {
             // Continously consume from the channel until cancelled
@@ -228,6 +240,11 @@ public partial class JetstreamWorker(
             {
                 while (consumer.ChannelReader.TryRead(out var msg))
                 {
+                    if (permitLimit > 0)
+                    {
+                        await rateLimiter.AcquireAsync(1, cancellationToken);
+                    }
+
                     try
                     {
                         await HandleMessage(msg, cancellationToken);

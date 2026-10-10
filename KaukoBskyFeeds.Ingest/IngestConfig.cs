@@ -8,7 +8,8 @@ public record IngestConfig(
     int FeedHistoryDays = 3,
     string? SingleCollection = null,
     bool DisableCleanup = false,
-    Dictionary<string, IngestFilterConfig>? Filter = null
+    Dictionary<string, IngestFilterConfig>? Filter = null,
+    int? InflowRatePerSec = null
 );
 
 public record IngestFilterConfig(
