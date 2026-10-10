@@ -10,7 +10,7 @@ namespace KaukoBskyFeeds.Db.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(name: "IX_Posts_EventTime_Did", table: "Posts");
+            /*migrationBuilder.DropIndex(name: "IX_Posts_EventTime_Did", table: "Posts");
 
             migrationBuilder.DropIndex(
                 name: "IX_PostReposts_EventTime_ParentDid",
@@ -30,7 +30,7 @@ namespace KaukoBskyFeeds.Db.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_PostLikes_EventTime_ParentDid",
                 table: "PostLikes"
-            );
+            );*/
 
             migrationBuilder.CreateIndex(
                 name: "IX_Posts_EventTime",
@@ -84,7 +84,7 @@ namespace KaukoBskyFeeds.Db.Migrations
 
             migrationBuilder.DropIndex(name: "IX_PostLikes_EventTime", table: "PostLikes");
 
-            migrationBuilder.CreateIndex(
+            /*migrationBuilder.CreateIndex(
                 name: "IX_Posts_EventTime_Did",
                 table: "Posts",
                 columns: new[] { "EventTime", "Did" },
@@ -117,7 +117,7 @@ namespace KaukoBskyFeeds.Db.Migrations
                 table: "PostLikes",
                 columns: new[] { "EventTime", "ParentDid" },
                 descending: new[] { true, false }
-            );
+            );*/
         }
     }
 }
