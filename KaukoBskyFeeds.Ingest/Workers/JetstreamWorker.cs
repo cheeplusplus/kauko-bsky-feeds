@@ -1,5 +1,4 @@
 using System.Threading.RateLimiting;
-using FishyFlip;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Ingest.Jetstream;
 using KaukoBskyFeeds.Ingest.Jetstream.Models;
@@ -140,7 +139,7 @@ public partial class JetstreamWorker(
         return offset;
     }
 
-    private async Task<List<string>?> FetchWantedDids(
+    private async Task<WantedDidStorage?> FetchWantedDids(
         string collection,
         CancellationToken cancellationToken = default
     )
@@ -212,7 +211,7 @@ public partial class JetstreamWorker(
                     collection
                 );
 
-                return wantedDids;
+                return new WantedDidStorage(wantedDids);
             },
             BskyCache.DefaultOpts,
             tags: ["ingest", "ingest/wantedDids"],
