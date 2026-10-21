@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Threading.RateLimiting;
 using KaukoBskyFeeds.Db;
 using KaukoBskyFeeds.Ingest.Jetstream;
@@ -139,12 +140,27 @@ public partial class JetstreamWorker(
         return offset;
     }
 
+    private readonly ConcurrentDictionary<string, DateTime> _wantedDidStorageCacheLastUpdate =
+        new();
+    private readonly ConcurrentDictionary<string, WantedDidStorage?> _wantedDidStorageCache = new();
+
     private async Task<WantedDidStorage?> FetchWantedDids(
         string collection,
         CancellationToken cancellationToken = default
     )
     {
-        return await memCache.GetOrCreateAsync(
+        // Attempt to prevent deserialization flooding by keeping a local copy that is less old than the cache duration
+        // If we wind up hitting it a few times on accident it's fine, as long as we don't hit it like, every time
+        if (
+            _wantedDidStorageCacheLastUpdate.TryGetValue(collection, out var lastUpdate)
+            && lastUpdate < (DateTime.Now + BskyCache.NormalCacheDuration)
+            && _wantedDidStorageCache.TryGetValue(collection, out var cachedResult)
+        )
+        {
+            return cachedResult;
+        }
+
+        var result = await memCache.GetOrCreateAsync(
             $"ingest_wanteddids_{collection}",
             async (ict) =>
             {
@@ -217,6 +233,15 @@ public partial class JetstreamWorker(
             tags: ["ingest", "ingest/wantedDids"],
             cancellationToken: cancellationToken
         );
+
+        _wantedDidStorageCache.AddOrUpdate(collection, _ => result, (_, _) => result);
+        _wantedDidStorageCacheLastUpdate.AddOrUpdate(
+            collection,
+            _ => DateTime.Now,
+            (_, _) => DateTime.Now
+        );
+
+        return result;
     }
 
     private async Task ReadChannel(CancellationToken cancellationToken)
