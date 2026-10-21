@@ -227,7 +227,7 @@ public partial class JetstreamWorker(
                     collection
                 );
 
-                return new WantedDidStorage(wantedDids);
+                return new WantedDidStorage([.. wantedDids]);
             },
             BskyCache.DefaultOpts,
             tags: ["ingest", "ingest/wantedDids"],
