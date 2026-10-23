@@ -25,23 +25,32 @@ namespace KaukoBskyFeeds.Db.Migrations
 
             modelBuilder.Entity("KaukoBskyFeeds.Db.Models.FeedInteraction", b =>
                 {
-                    b.Property<string>("FeedUri")
-                        .HasColumnType("text");
-
-                    b.Property<string>("UserDid")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ItemUri")
-                        .HasColumnType("text");
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("EventTime")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FeedUri")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Interaction")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.HasKey("FeedUri", "UserDid", "ItemUri");
+                    b.Property<string>("ItemUri")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserDid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeedUri", "UserDid", "ItemUri");
 
                     b.ToTable("FeedInteractions");
                 });

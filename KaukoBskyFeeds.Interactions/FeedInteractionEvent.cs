@@ -9,6 +9,7 @@ public record FeedInteractionEvent(ATUri FeedUri, ATDid UserDid, ATUri ItemUri, 
     {
         return new FeedInteraction
         {
+            Id = Guid.NewGuid(),
             EventTime = DateTime.UtcNow,
             FeedUri = FeedUri.ToString(),
             UserDid = UserDid.ToString(),
