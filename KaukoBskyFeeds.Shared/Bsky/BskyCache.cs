@@ -192,16 +192,36 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         CancellationToken cancellationToken = default
     )
     {
-        var followingList = await GetFollowing(user, cancellationToken);
-        var followersList = await GetFollowers(user, cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var followingList = await GetFollowing(user, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var followersList = await GetFollowers(user, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
-        return followingList
-            .Select(s => s.Handler)
-            .Intersect(followersList.Select(s => s.Handler))
-            .Select(ATDid.Create)
-            .Where(w => w != null)
-            .Cast<ATDid>()
-            .ToList();
+            return followingList
+                .Select(s => s.Handler)
+                .Intersect(followersList.Select(s => s.Handler))
+                .Select(ATDid.Create)
+                .Where(w => w != null)
+                .Cast<ATDid>()
+                .ToList();
+        }
+        catch (OperationCanceledException oce)
+        {
+            // Debug why we're seeing OCEs here
+            logger.LogWarning(
+                oce,
+                "Cancelled. Msg={Message}, InnerMsg={InnerMsg}, CallerRequested={Caller}, ExceptionToken={ExToken}, Inner={InnerName}",
+                oce.Message,
+                oce.InnerException?.Message,
+                cancellationToken.IsCancellationRequested,
+                oce.CancellationToken.IsCancellationRequested,
+                oce.InnerException?.GetType().Name
+            );
+            throw;
+        }
     }
 
     public async Task<IEnumerable<ATDid>> GetListMembers(
