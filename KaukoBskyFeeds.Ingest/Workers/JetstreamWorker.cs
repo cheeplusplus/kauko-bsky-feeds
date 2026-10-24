@@ -166,7 +166,7 @@ public partial class JetstreamWorker(
             {
                 // Fetch wanted DIDs
                 List<string> wantedDids = [];
-                if (_ingestConfig.SingleCollection != null && _ingestConfig.Filter != null)
+                if (_ingestConfig.Filter != null)
                 {
                     if (_ingestConfig.Filter.TryGetValue(collection, out var targetFilter))
                     {
