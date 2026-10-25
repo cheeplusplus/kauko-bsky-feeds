@@ -32,6 +32,8 @@ This requires a file called `bsky.config.json` that looks like this:
 }
 ```
 
+and copy `ingest.config.default.json` to `ingest.config.json`.
+
 To publish it as a Docker container, run
 ```
 dotnet publish --os linux --arch x64 /t:PublishContainer
