@@ -69,7 +69,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
-            $"post_{postUri}",
+            $"post:{postUri.AsSafeKey()}",
             async (ct) =>
             {
                 logger.LogDebug("Fetching post {postUri} following", postUri);
@@ -77,7 +77,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
                 return d?.Posts.FirstOrDefault();
             },
             DefaultOpts,
-            tags: ["post", $"{postUri}", $"user/{postUri.Did}"],
+            tags: ["post", $"post/{postUri}", $"user/{postUri.Did}"],
             cancellationToken: cancellationToken
         );
     }
@@ -99,7 +99,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         {
             allPosts[uri] = new GetPostsDict(
                 uri,
-                await cache.GetAsync<PostView>($"post_{uri}", cancellationToken)
+                await cache.GetAsync<PostView>($"post:{uri.AsSafeKey()}", cancellationToken)
             );
         }
 
@@ -139,7 +139,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         var self = api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
-            $"user_{user}_following",
+            $"user:{user.AsSafeKey()}:following",
             async (ct) =>
             {
                 logger.LogDebug("Fetching user {listUri} following", user);
@@ -153,7 +153,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
                 );
             },
             DefaultOpts,
-            tags: ["user", $"user/{user}"],
+            tags: ["user", $"user/{user}", $"user/{user}/following"],
             cancellationToken: cancellationToken
         );
     }
@@ -166,7 +166,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         var self = api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
-            $"user_{user}_followers",
+            $"user:{user.AsSafeKey()}:followers",
             async (ct) =>
             {
                 logger.LogDebug("Fetching user {listUri} followers", user);
@@ -212,7 +212,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
-            $"list_{listUri}_members",
+            $"list:{listUri.AsSafeKey()}:members",
             async (ct) =>
             {
                 logger.LogDebug("Fetching list {listUri} members list", listUri);
@@ -226,7 +226,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
                 );
             },
             DefaultOpts,
-            tags: ["list", $"{listUri}", $"user/{listUri.Did}"],
+            tags: ["list", $"list/{listUri}", $"user/{listUri.Did}"],
             cancellationToken: cancellationToken
         );
     }
@@ -239,7 +239,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
-            $"user_{user}_profile",
+            $"user:{user.AsSafeKey()}:profile",
             async (ct) =>
             {
                 logger.LogDebug("Fetching user {user} profile", user);
@@ -266,7 +266,10 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         {
             allProfiles[user] = new GetProfilesDict(
                 user,
-                await cache.GetAsync<ProfileViewDetailed>($"user_{user}_profile", cancellationToken)
+                await cache.GetAsync<ProfileViewDetailed>(
+                    $"user:{user.AsSafeKey()}:profile",
+                    cancellationToken
+                )
             );
         }
 
@@ -311,7 +314,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
-                $"user_{user}_likes",
+                $"user:{user.AsSafeKey()}:likes",
                 async (ct) =>
                 {
                     logger.LogDebug("Fetching user {user} likes", user);
@@ -335,7 +338,7 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         api.AssertLogin();
 
         return await cache.GetOrCreateAsync(
-                $"user_{user}_lists",
+                $"user:{user.AsSafeKey()}:lists",
                 async (ct) =>
                 {
                     logger.LogDebug("Fetching user {user} lists", user);

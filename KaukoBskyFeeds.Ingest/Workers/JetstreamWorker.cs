@@ -164,7 +164,7 @@ public partial class JetstreamWorker(
         }
 
         var result = await memCache.GetOrCreateAsync(
-            $"ingest_wanteddids_{collection}",
+            $"ingest:wanteddids:{collection}",
             async (ict) =>
             {
                 // Fetch wanted DIDs
