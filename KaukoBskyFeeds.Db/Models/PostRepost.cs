@@ -10,6 +10,9 @@ namespace KaukoBskyFeeds.Db.Models;
 [Index(nameof(CreatedAt), AllDescending = true)]
 public class PostRepost : IPostInteraction
 {
+    // RepostDid/RepostRkey is the reposter
+    // ParentDid/ParentRkey is the original post
+
     [Required]
     public required string RepostDid { get; set; }
 
@@ -27,7 +30,7 @@ public class PostRepost : IPostInteraction
 
     [Required]
     public long EventTimeUs { get; set; }
-    
+
     [Required]
     public DateTime CreatedAt { get; set; }
 

@@ -112,6 +112,9 @@
                             },
                             {
                                 "$ref": "#/definitions/FeedProcessorPopularAmong"
+                            },
+                            {
+                                "$ref": "#/definitions/FeedProcessorRepostsOnly"
                             }
                         ]
                     },
@@ -356,6 +359,35 @@
                             "$comment": "This is needed if the database is filtering posts",
                             "description": "Perform the images only check against the server instead of the db",
                             "type": "boolean"
+                        }
+                    }
+                }
+            }
+        },
+        "FeedProcessorRepostsOnly": {
+            "type": "object",
+            "properties": {
+                "Type": {
+                    "type": "string",
+                    "const": "RepostsOnly"
+                },
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "FetchTimeline": {
+                            "description": "Fetch the timeline instead of using the cache",
+                            "type": "boolean"
+                        },
+                        "ExcludeSelfReposts": {
+                            "description": "Exclude self-reposts",
+                            "type": "boolean"
+                        },
+                        "OnlyShowUsers": {
+                            "description": "Only show posts from these users",
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/atUriForDid"
+                            }
                         }
                     }
                 }

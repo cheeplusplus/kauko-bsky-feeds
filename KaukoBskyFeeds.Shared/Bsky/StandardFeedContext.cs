@@ -14,7 +14,7 @@ public class StandardFeedContext
     public required string FeedUri { get; set; }
 
     [JsonPropertyName("ctx")]
-    public required string? ProvidedCtx { get; set; }
+    public string? ProvidedCtx { get; set; }
 
     public string Serialize()
     {

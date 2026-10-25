@@ -49,7 +49,7 @@ public class XrpcController(
         var self = await EnsureLogin(cancellationToken);
 
         // Handle feed owner restriction
-        if (feedInstance.Config.RestrictToFeedOwner && Equals(requestingDid, self))
+        if (feedInstance.Config.RestrictToFeedOwner && !Equals(requestingDid, self))
         {
             return TypedResults.Unauthorized();
         }
