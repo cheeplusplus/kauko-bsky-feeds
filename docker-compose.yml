@@ -8,6 +8,7 @@ services:
       ConnectionStrings__psqldb: "Host=postgres; Database=bskyfeed; Username=bskyfeed; Password=deefyksb"
     volumes:
       - ./bsky.config.json:/app/bsky.config.json:ro
+      - ./feeds.config.json:/app/feeds.config.json:ro
     depends_on:
       - postgres
 
