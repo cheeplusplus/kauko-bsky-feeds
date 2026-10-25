@@ -1,11 +1,6 @@
 namespace KaukoBskyFeeds.Shared;
 
-public record BskyConfigBlock(
-    BskyConfigAuth Auth,
-    BskyConfigIdentity Identity,
-    Dictionary<string, BskyConfigFeedProcessor> FeedProcessors,
-    BskyConfigWeb? Web
-);
+public record BskyConfigBlock(BskyConfigAuth Auth, BskyConfigIdentity Identity, BskyConfigWeb? Web);
 
 public record BskyConfigAuth(string Username, string Password);
 

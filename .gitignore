@@ -1,5 +1,6 @@
 bsky.config.json
 ingest.config.json
+feeds.config.json
 data/
 
 ## Ignore Visual Studio temporary files, build results, and

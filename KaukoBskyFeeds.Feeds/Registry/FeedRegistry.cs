@@ -14,10 +14,7 @@ public class FeedRegistry
     public FeedRegistry(IConfiguration configuration)
     {
         // Reload the feed registry when FeedProcessors changes
-        var reloadToken = configuration
-            .GetRequiredSection("BskyConfig")
-            .GetRequiredSection("FeedProcessors")
-            .GetReloadToken();
+        var reloadToken = configuration.GetRequiredSection("FeedProcessors").GetReloadToken();
 
         reloadToken.RegisterChangeCallback(
             _ =>
@@ -75,12 +72,16 @@ public class FeedRegistry
             );
 
         // Combine configurations
-        _feeds = bskyConfig
-            .FeedProcessors.Select(feedCfg => new RegisteredFeed(
+        var feedProcessorSection = configuration.GetRequiredSection("FeedProcessors");
+        var feedProcessorConfig =
+            feedProcessorSection.Get<Dictionary<string, BskyConfigFeedProcessor>>()
+            ?? throw new Exception("Missing configuration");
+        _feeds = feedProcessorConfig
+            .Select(feedCfg => new RegisteredFeed(
                 feedCfg.Value.Type,
                 feedTypes[feedCfg.Value.Type].Item1,
-                bskyConfigSection
-                    .GetRequiredSection($"FeedProcessors:{feedCfg.Key}:Config")
+                feedProcessorSection
+                    .GetRequiredSection($"{feedCfg.Key}:Config")
                     .Get(feedTypes[feedCfg.Value.Type].Item2)
                     ?? throw new Exception("Failed to parse feed configuration of " + feedCfg.Key),
                 feedCfg.Value.Config,

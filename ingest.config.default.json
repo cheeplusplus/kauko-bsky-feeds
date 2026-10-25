@@ -1,6 +1,0 @@
-{
-    "IngestConfig": {
-        "Verbose": true,
-        "ConsumeHistoricFeed": true
-    }
-}
