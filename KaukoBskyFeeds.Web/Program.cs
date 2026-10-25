@@ -11,7 +11,7 @@ using OpenTelemetry.Metrics;
 var builder = WebApplication.CreateBuilder(args);
 
 var dataPath = BskyConfigExtensions.GetDataDir("bsky.config.json");
-builder.Configuration.AddJsonFile(dataPath.ConfigPath);
+builder.Configuration.AddJsonFile(dataPath.ConfigPath, false, true);
 
 builder.Services.Configure<JsonOptions>(options =>
     options.SerializerOptions.DefaultIgnoreCondition =
