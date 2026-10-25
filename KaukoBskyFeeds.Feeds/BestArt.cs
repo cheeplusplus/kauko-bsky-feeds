@@ -47,8 +47,8 @@ public class BestArt(
         }
 
         var finalPostList = await mCache.GetOrCreateAsync(
-            $"feed_db_{feedMeta.FeedUri}",
-            async (_) =>
+            GetDbCacheName(),
+            async ct =>
             {
                 return await postsQuery
                     .Where(w =>
@@ -60,10 +60,10 @@ public class BestArt(
                         o.LikeCount + o.QuotePostCount + o.ReplyCount + o.RepostCount
                     )
                     .Take(FeedLimit)
-                    .ToListAsync(cancellationToken);
+                    .ToListAsync(ct);
             },
             BskyCache.DefaultOpts,
-            tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+            tags: DbCacheTags,
             cancellationToken: cancellationToken
         );
 

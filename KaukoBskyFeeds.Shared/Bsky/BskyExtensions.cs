@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Web;
 using FishyFlip;
+using FishyFlip.Models;
 using FishyFlip.Tools.Json;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
@@ -127,6 +129,16 @@ public static class BskyExtensions
     public static DateTime FromMicroseconds(long us)
     {
         return DateTimeOffset.FromUnixTimeMilliseconds(us / 1000).DateTime.AsUtc();
+    }
+
+    public static string AsSafeKey(this ATUri uri)
+    {
+        return HttpUtility.UrlEncode(uri.ToString());
+    }
+
+    public static string AsSafeKey(this ATDid did)
+    {
+        return HttpUtility.UrlEncode(did.ToString());
     }
 }
 

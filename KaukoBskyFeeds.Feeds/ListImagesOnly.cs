@@ -20,11 +20,9 @@ public class ListImagesOnly(
     IBskyApi api,
     HybridCache mCache,
     IBskyCache bsCache
-) : IFeed
+) : BaseFeed(feedMeta.FeedUri, feedConfig)
 {
-    public BaseFeedConfig Config => feedConfig;
-
-    public async Task<CustomSkeletonFeed> GetFeedSkeleton(
+    public override async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
         int? limit,
         string? cursor,
@@ -56,16 +54,16 @@ public class ListImagesOnly(
         else
         {
             posts = await mCache.GetOrCreateAsync(
-                $"feed_db_{feedMeta.FeedUri}|{cursor}",
-                async (_) =>
+                GetDbCacheName(cursor: cursor),
+                async ct =>
                     await db
                         .Posts.LatestFromCursor(cursor)
                         .Where(filter)
                         // Always take the same amount, postgres is being weird about response time with lower limits
                         .Take(50)
-                        .ToListAsync(cancellationToken),
+                        .ToListAsync(ct),
                 BskyCache.QuickOpts,
-                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                tags: DbCacheTags,
                 cancellationToken: cancellationToken
             );
             if (limit.HasValue)

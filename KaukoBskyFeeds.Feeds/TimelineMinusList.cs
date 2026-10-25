@@ -77,18 +77,18 @@ public class TimelineMinusList(
         else
         {
             posts = await mCache.GetOrCreateAsync(
-                $"feed_db_{feedMeta.FeedUri}|{cursor}",
-                async (_) =>
+                GetDbCacheName(target, cursor),
+                async ct =>
                 {
                     return await db
                         .Posts.LatestFromCursor(cursor)
                         .Where(w => followingListStr.Contains(w.Did))
                         // use a large limit - assume we need to fetch more than we're going to show
                         .Take(100)
-                        .ToListAsync(cancellationToken);
+                        .ToListAsync(ct);
                 },
                 BskyCache.QuickOpts,
-                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                tags: DbCacheTags,
                 cancellationToken: cancellationToken
             );
         }

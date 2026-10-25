@@ -49,8 +49,8 @@ public class PopularAmong(
         var targetListStr = targetDids.Select(s => s.Handler).ToList();
 
         var allInteractions = await mCache.GetOrCreateAsync(
-            $"feed_db_{feedMeta.FeedUri}",
-            async (_) =>
+            GetDbCacheName(requestor),
+            async ct =>
             {
                 var qLikes = db
                     .PostLikes.Where(w => targetListStr.Contains(w.LikeDid))
@@ -99,10 +99,9 @@ public class PopularAmong(
                 qFinal = qFinal
                     .Where(w => w.Interactions >= feedConfig.MinRelevance)
                     .OrderByDescending(o => o.Interactions)
-                    .Take(limit ?? 50);
+                    .Take(50);
 
-                // var req = await q.ToListAsync(cancellationToken);
-                var req = await qFinal.ToListAsync(cancellationToken);
+                var req = await qFinal.ToListAsync(ct);
                 return req.Select(s => new
                     {
                         Count = s.Interactions,
@@ -111,7 +110,7 @@ public class PopularAmong(
                     .Select(s => new { s.Count, s.Ref });
             },
             BskyCache.DefaultOpts,
-            tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+            tags: DbCacheTags,
             cancellationToken: cancellationToken
         );
         var allInteractionsUseful = allInteractions
@@ -155,6 +154,7 @@ public class PopularAmong(
         var filteredFeed = allInteractionsUseful
             .Where(w => !skipPosts.Contains(w.PostUri.ToString()))
             .OrderByDescending(o => o.Count)
+            .Take(limit ?? 50)
             .Select(s => new SkeletonFeedPost(
                 s.PostUri,
                 feedContext: this.GetStandardFeedContext($"{s.Count} interactions")

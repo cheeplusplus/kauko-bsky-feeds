@@ -77,7 +77,7 @@ public class RepostsOnly(
         else
         {
             var postDb = await mCache.GetOrCreateAsync(
-                $"feed_db_{feedMeta.FeedUri}||{requestor}|{cursor}",
+                GetDbCacheName(requestor, cursor),
                 async (ct) =>
                 {
                     return await db
@@ -87,11 +87,11 @@ public class RepostsOnly(
                             && (!feedConfig.ExcludeSelfReposts || w.ParentDid != w.RepostDid)
                         )
                         .OrderByDescending(o => o.EventTime)
-                        .Take(limit ?? 50)
+                        .Take(50)
                         .ToListAsync(ct);
                 },
                 BskyCache.QuickOpts,
-                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                tags: DbCacheTags,
                 cancellationToken: cancellationToken
             );
 

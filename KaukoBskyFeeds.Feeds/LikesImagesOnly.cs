@@ -19,11 +19,9 @@ public class LikesImagesOnly(
     IBskyApi api,
     HybridCache mCache,
     IBskyCache bsCache
-) : IFeed
+) : BaseFeed(feedMeta.FeedUri, feedConfig)
 {
-    public BaseFeedConfig Config => feedConfig;
-
-    public async Task<CustomSkeletonFeed> GetFeedSkeleton(
+    public override async Task<CustomSkeletonFeed> GetFeedSkeleton(
         ATDid? requestor,
         int? limit,
         string? cursor,
@@ -56,18 +54,18 @@ public class LikesImagesOnly(
         {
             var likesSimpleUris = likesUris.Select(s => s.Did + "/" + s.Rkey);
             var dbPosts = await mCache.GetOrCreateAsync(
-                $"feed_db_{feedMeta.FeedUri}||{requestor}",
-                async (_) =>
+                GetDbCacheName(requestor),
+                async ct =>
                 {
                     return await db
                         .Posts.Where(w =>
                             likesSimpleUris.Contains(w.Did + "/" + w.Rkey) && w.ImageCount > 0
                         )
-                        .ToListAsync(cancellationToken);
+                        .ToListAsync(ct);
                 },
                 // match cache time on GetLikes
                 BskyCache.DefaultOpts,
-                tags: ["feed", "feed/db", $"feed/{feedMeta.FeedUri}"],
+                tags: DbCacheTags,
                 cancellationToken: cancellationToken
             );
 

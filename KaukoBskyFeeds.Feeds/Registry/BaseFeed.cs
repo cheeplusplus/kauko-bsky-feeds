@@ -25,4 +25,11 @@ public abstract class BaseFeed(ATUri feedUri, BaseFeedConfig baseConfig) : IFeed
 
         return ctx.Serialize();
     }
+
+    protected string GetDbCacheName(ATDid? requestor = null, string? cursor = null)
+    {
+        return $"feed_db:{{{feedUri.AsSafeKey()}}}:{requestor?.AsSafeKey() ?? ""}:{cursor ?? ""}";
+    }
+
+    protected string[] DbCacheTags => ["feed", "feed/db", $"feed/{feedUri}"];
 }
