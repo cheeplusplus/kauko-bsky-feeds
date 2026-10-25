@@ -3,12 +3,21 @@ using System.ComponentModel;
 
 namespace KaukoBskyFeeds.Ingest.Workers;
 
+/// <summary>
+/// An immutable storage of wanted DIDs for use with HybridCache
+/// </summary>
 [ImmutableObject(true)]
-public sealed class WantedDidStorage
+public sealed class WantedDidStorage(ImmutableArray<string> values)
 {
-    public ImmutableArray<string> Values { get; }
+    public ImmutableArray<string> Values { get; } = values;
+}
 
-    public WantedDidStorage(ImmutableArray<string> values) => Values = values;
+/// <summary>
+/// Soft wrapper of <see cref="WantedDidStorage"/> for faster lookup
+/// </summary>
+public sealed class WantedDidStorageProvider(WantedDidStorage? storage)
+{
+    private readonly HashSet<string> _hashSet = [.. storage?.Values ?? []];
 
-    public bool Contains(string did) => Values.Contains(did);
+    public bool Contains(string did) => _hashSet.Contains(did);
 }

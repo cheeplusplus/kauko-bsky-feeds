@@ -142,9 +142,12 @@ public partial class JetstreamWorker(
 
     private readonly ConcurrentDictionary<string, DateTime> _wantedDidStorageCacheLastUpdate =
         new();
-    private readonly ConcurrentDictionary<string, WantedDidStorage?> _wantedDidStorageCache = new();
+    private readonly ConcurrentDictionary<
+        string,
+        WantedDidStorageProvider?
+    > _wantedDidStorageCache = new();
 
-    private async Task<WantedDidStorage?> FetchWantedDids(
+    private async Task<WantedDidStorageProvider?> FetchWantedDids(
         string collection,
         CancellationToken cancellationToken = default
     )
@@ -234,14 +237,16 @@ public partial class JetstreamWorker(
             cancellationToken: cancellationToken
         );
 
-        _wantedDidStorageCache.AddOrUpdate(collection, _ => result, (_, _) => result);
+        var provider = new WantedDidStorageProvider(result);
+
+        _wantedDidStorageCache.AddOrUpdate(collection, _ => provider, (_, _) => provider);
         _wantedDidStorageCacheLastUpdate.AddOrUpdate(
             collection,
             _ => DateTime.Now,
             (_, _) => DateTime.Now
         );
 
-        return result;
+        return provider;
     }
 
     private async Task ReadChannel(CancellationToken cancellationToken)
