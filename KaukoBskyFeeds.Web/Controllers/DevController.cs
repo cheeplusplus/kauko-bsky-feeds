@@ -21,7 +21,8 @@ public class DevController(
     IConfiguration configuration,
     FeedRegistry feedRegistry,
     FeedDbContext dbContext,
-    IBskyApi cApi
+    IBskyApi cApi,
+    IBskyCache bCache
 ) : BskyControllerBase(configuration, cApi)
 {
     private bool DevEndpointsEnabled =>
@@ -100,6 +101,7 @@ public class DevController(
 
         static string Lat(DateTime? et) =>
             (DateTime.UtcNow - et)?.ToString("d'd 'h'h 'm'm 's's'") ?? "N/A";
+
         var postDistance = Lat(lastPost?.EventTime);
         var likeDistance = Lat(lastPostLike?.EventTime);
         var repostDistance = Lat(lastPostRepost?.EventTime);
@@ -138,6 +140,7 @@ public class DevController(
         {
             throw new Exception("Failed to resolve DID");
         }
+
         var profile = await Api.GetProfile(resolvedDid.Did, cancellationToken);
         return TypedResults.Json(profile, Api.JsonSerializerOptions);
     }
@@ -191,6 +194,60 @@ public class DevController(
     [SuppressMessage("ReSharper", "NotAccessedPositionalProperty.Global")]
     public record CachedPostResponse(string AtUri, IPostRecord Post, long TotalInteractions);
 
+    [HttpGet("query/text-search")]
+    public async Task<
+        Results<NotFound, JsonHttpResult<List<QueryCachedPostsSearchResponse>>>
+    > QueryCachedPostsTextSearch(
+        [FromQuery] string query,
+        [FromQuery] bool expand = false,
+        [FromQuery] int limit = 50,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!DevEndpointsEnabled)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var posts = await dbContext
+            .Posts.Where(s => s.Text.ToLower().Contains(query.ToLower()))
+            .OrderByDescending(o => o.EventTime)
+            .Take(limit)
+            .Select(s => new QueryCachedPostsSearchResponse(s.Did, s.Rkey, s.ToUri(), s.Text, null))
+            .ToListAsync(cancellationToken);
+
+        if (expand)
+        {
+            await EnsureLogin(cancellationToken);
+
+            var upstream = await bCache.GetPosts(
+                posts.Select(p => ATUri.Create(p.AtUri)),
+                cancellationToken
+            );
+            posts = posts
+                .Select(p =>
+                    p with
+                    {
+                        Post = upstream.SingleOrDefault(w =>
+                            w != null && w.Uri.ToString() == p.AtUri
+                        ),
+                    }
+                )
+                .ToList();
+        }
+
+        return TypedResults.Json(posts, BskyExtensions.BskyJso);
+    }
+
+    [SuppressMessage("ReSharper", "NotAccessedPositionalProperty.Global")]
+    public record QueryCachedPostsSearchResponse(
+        string Did,
+        string Rkey,
+        string AtUri,
+        string Text,
+        PostView? Post = null
+    );
+
     [HttpPost("install")]
     public async Task<Results<NotFound, Ok<string>>> Install(
         CancellationToken cancellationToken = default
@@ -211,6 +268,7 @@ public class DevController(
             {
                 break;
             }
+
             if (!feed.FeedBaseConfig.Install)
             {
                 continue;
