@@ -10,7 +10,7 @@ namespace KaukoBskyFeeds.Shared.Bsky;
 public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cache) : IBskyCache
 {
     public static readonly TimeSpan NormalCacheDuration = TimeSpan.FromMinutes(10);
-    private static readonly TimeSpan BackgroundCacheDuration = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan BackgroundCacheDuration = TimeSpan.FromDays(1);
 
     public static readonly HybridCacheEntryOptions DefaultOpts = new()
     {
