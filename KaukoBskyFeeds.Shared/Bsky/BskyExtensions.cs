@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Web;
@@ -72,18 +73,24 @@ public static class BskyExtensions
         return collection;
     }
 
-    public static async Task<IEnumerable<T>> GetAllResults<T>(
+    /// <summary>
+    /// Wrap a BskyPageableList callback into an IAsyncEnumerable
+    /// </summary>
+    /// <param name="callback">Callback function</param>
+    /// <param name="delayMs">How long to delay between pages</param>
+    /// <param name="cancellationToken">CancellationToken</param>
+    /// <typeparam name="T">Data type</typeparam>
+    /// <returns>IAsyncEnumerable of results</returns>
+    public static async IAsyncEnumerable<T> GetAllResultsEnumerable<T>(
         BskyPageableList<T> callback,
-        CancellationToken cancellationToken = default
+        int? delayMs,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
-        where T : class
     {
         string? cursor = null;
-        List<T> results = [];
-
         if (cancellationToken.IsCancellationRequested)
         {
-            return results;
+            yield break;
         }
 
         while (true)
@@ -91,7 +98,10 @@ public static class BskyExtensions
             var (paged, curCursor) = await callback(cursor, cancellationToken);
             if (paged != null)
             {
-                results.AddRange(paged);
+                foreach (var page in paged)
+                {
+                    yield return page;
+                }
             }
 
             if (curCursor == null || cancellationToken.IsCancellationRequested)
@@ -99,7 +109,73 @@ public static class BskyExtensions
                 break;
             }
 
+            if (delayMs != null && delayMs > 0)
+            {
+                await Task.Delay(delayMs.Value, cancellationToken);
+            }
+
             cursor = curCursor;
+        }
+    }
+
+    /// <summary>
+    /// Wrap GetAllResultsEnumerable with automatic cursor support
+    /// </summary>
+    /// <param name="action">Action to perform</param>
+    /// <param name="valueSelector">Value selector</param>
+    /// <param name="cursorSelector">Cursor selector</param>
+    /// <param name="delayMs">How long to delay between pages</param>
+    /// <param name="cancellationToken">CancellationToken</param>
+    /// <typeparam name="TOut">Output type</typeparam>
+    /// <typeparam name="TIn">InputType</typeparam>
+    /// <returns>IAsyncEnumerable of results</returns>
+    public static IAsyncEnumerable<TOut> GetAllResultsCursorEnumerable<TOut, TIn>(
+        Func<string?, CancellationToken, Task<TIn>> action,
+        Func<TIn, IEnumerable<TOut>?> valueSelector,
+        Func<TIn, string?> cursorSelector,
+        int? delayMs = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        BskyPageableList<TOut> getPage = async (cursor, ict) =>
+        {
+            var d = await action(cursor, ict);
+            return (valueSelector(d), cursorSelector(d));
+        };
+
+        return GetAllResultsEnumerable(getPage, delayMs, cancellationToken);
+    }
+
+    /// <summary>
+    /// Collect an IAsyncEnumerable to a List.
+    /// Make sure to set a limit if you're using an unbounded datasource source.
+    /// </summary>
+    /// <param name="list">Enumerable to collect</param>
+    /// <param name="selector">Value selector</param>
+    /// <param name="filter">Filter selector</param>
+    /// <param name="limit">Output item limit (after filter)</param>
+    /// <typeparam name="TIn">Input type</typeparam>
+    /// <typeparam name="TOut">Output type</typeparam>
+    /// <returns>Collected list</returns>
+    public static async Task<IEnumerable<TOut>> ToListAsync<TIn, TOut>(
+        this IAsyncEnumerable<TIn> list,
+        Func<TIn, TOut> selector,
+        Func<TIn, bool>? filter = null,
+        int? limit = null
+    )
+    {
+        var results = new List<TOut>();
+        await foreach (var val in list)
+        {
+            if (filter == null || filter(val))
+            {
+                results.Add(selector(val));
+            }
+
+            if (results.Count > limit)
+            {
+                break;
+            }
         }
 
         return results;

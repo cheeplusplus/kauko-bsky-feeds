@@ -11,100 +11,14 @@ using KaukoBskyFeeds.Shared.Metrics;
 
 namespace KaukoBskyFeeds.Shared.Bsky;
 
-public interface IBskyApi
-{
-    JsonSerializerOptions JsonSerializerOptions { get; }
-
-    bool IsLoggedIn { get; }
-    ATDid? LoggedInUser { get; }
-
-    Task<ATDid> Login(BskyConfigAuth authConfig, CancellationToken cancellationToken = default);
-    ATDid AssertLogin();
-    Task RefreshSession();
-
-    // app.bsky.actor
-    Task<ProfileViewDetailed?> GetProfile(
-        ATIdentifier identifier,
-        CancellationToken cancellationToken = default
-    );
-    Task<GetProfilesOutput?> GetProfiles(
-        List<ATIdentifier> identifiers,
-        CancellationToken cancellationToken = default
-    );
-
-    // app.bsky.feed
-    Task<GetListFeedOutput?> GetListFeed(
-        ATUri listUri,
-        int? limit = null,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<GetPostsOutput?> GetPosts(
-        List<ATUri> postUris,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<GetTimelineOutput?> GetTimeline(
-        int? limit = null,
-        string? cursor = null,
-        CancellationToken cancellationToken = default
-    );
-
-    // app.bsky.graph
-    Task<GetFollowsOutput?> GetFollows(
-        ATIdentifier identifier,
-        string? cursor = null,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<GetFollowersOutput?> GetFollowers(
-        ATIdentifier identifier,
-        string? cursor = null,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<GetListOutput?> GetList(
-        ATUri listUri,
-        string? cursor = null,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<GetListsOutput?> GetLists(
-        ATIdentifier identifier,
-        CancellationToken cancellationToken = default
-    );
-
-    // com.atproto.identity
-    Task<ResolveHandleOutput?> ResolveHandle(
-        ATHandle handle,
-        CancellationToken cancellationToken = default
-    );
-
-    // com.atproto.repo
-    Task<ListRecordsOutput?> RepoListRecords(
-        ATIdentifier identifier,
-        string collectionType,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<PutRecordOutput?> RepoPutRecord(
-        ATIdentifier repo,
-        string collection,
-        string rkey,
-        ATObject record,
-        bool? validate = null,
-        CancellationToken cancellationToken = default
-    );
-}
-
-// TODO: Move the cursor walkers from BskyCache to here
-// It'd be really nice to just say .Take(50) instead of `limit: 50`
 public class BskyApi(ATProtocol proto, BskyMetrics metrics) : IBskyApi
 {
     public JsonSerializerOptions JsonSerializerOptions => proto.Options.JsonSerializerOptions;
 
     public bool IsLoggedIn => proto.Session != null;
     public ATDid? LoggedInUser => proto.Session?.Did;
+
+    private const int DefaultDelayMs = 100;
 
     public async Task<ATDid> Login(
         BskyConfigAuth authConfig,
@@ -170,13 +84,35 @@ public class BskyApi(ATProtocol proto, BskyMetrics metrics) : IBskyApi
     public async Task<GetListFeedOutput?> GetListFeed(
         ATUri listUri,
         int? limit = null,
+        string? cursor = null,
         CancellationToken cancellationToken = default
     )
     {
         var r = await proto
-            .Feed.GetListFeedAsync(listUri, limit, cancellationToken: cancellationToken)
+            .Feed.GetListFeedAsync(
+                listUri,
+                limit,
+                cursor: cursor,
+                cancellationToken: cancellationToken
+            )
             .Record(metrics, "app.bsky.feed.getListFeed");
         return r.HandleResult();
+    }
+
+    public IAsyncEnumerable<FeedViewPost> GetListFeedEnumerable(
+        ATUri listUri,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // Arbitrarily fetching a bunch at once
+        // Realistically this is where we'd benefit from using expressions
+        return BskyExtensions.GetAllResultsCursorEnumerable(
+            (cursor, ct) => GetListFeed(listUri, 50, cursor, ct),
+            d => d?.Feed,
+            d => d?.Cursor,
+            DefaultDelayMs,
+            cancellationToken
+        );
     }
 
     public async Task<GetPostsOutput?> GetPosts(
@@ -206,6 +142,21 @@ public class BskyApi(ATProtocol proto, BskyMetrics metrics) : IBskyApi
         return r.HandleResult();
     }
 
+    public IAsyncEnumerable<FeedViewPost> GetTimelineEnumerable(
+        CancellationToken cancellationToken = default
+    )
+    {
+        // Arbitrarily fetching a bunch at once
+        // Realistically this is where we'd benefit from using expressions
+        return BskyExtensions.GetAllResultsCursorEnumerable(
+            (cursor, ct) => GetTimeline(50, cursor, ct),
+            d => d?.Feed,
+            d => d?.Cursor,
+            DefaultDelayMs,
+            cancellationToken
+        );
+    }
+
     public async Task<GetFollowsOutput?> GetFollows(
         ATIdentifier identifier,
         string? cursor = null,
@@ -216,6 +167,20 @@ public class BskyApi(ATProtocol proto, BskyMetrics metrics) : IBskyApi
             .Graph.GetFollowsAsync(identifier, cursor: cursor, cancellationToken: cancellationToken)
             .Record(metrics, "app.bsky.graph.getFollows");
         return r.HandleResult();
+    }
+
+    public IAsyncEnumerable<ProfileView> GetFollowsEnumerable(
+        ATIdentifier identifier,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return BskyExtensions.GetAllResultsCursorEnumerable(
+            (cursor, ct) => GetFollows(identifier, cursor, ct),
+            d => d?.Follows,
+            d => d?.Cursor,
+            DefaultDelayMs,
+            cancellationToken
+        );
     }
 
     public async Task<GetFollowersOutput?> GetFollowers(
@@ -234,6 +199,20 @@ public class BskyApi(ATProtocol proto, BskyMetrics metrics) : IBskyApi
         return r.HandleResult();
     }
 
+    public IAsyncEnumerable<ProfileView> GetFollowersEnumerable(
+        ATIdentifier identifier,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return BskyExtensions.GetAllResultsCursorEnumerable(
+            (cursor, ct) => GetFollowers(identifier, cursor, ct),
+            d => d?.Followers,
+            d => d?.Cursor,
+            DefaultDelayMs,
+            cancellationToken
+        );
+    }
+
     public async Task<GetListOutput?> GetList(
         ATUri listUri,
         string? cursor = null,
@@ -246,15 +225,44 @@ public class BskyApi(ATProtocol proto, BskyMetrics metrics) : IBskyApi
         return r.HandleResult();
     }
 
+    public IAsyncEnumerable<ListItemView> GetListEnumerable(
+        ATUri listUri,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return BskyExtensions.GetAllResultsCursorEnumerable(
+            (cursor, ct) => GetList(listUri, cursor, ct),
+            d => d?.Items,
+            d => d?.Cursor,
+            DefaultDelayMs,
+            cancellationToken
+        );
+    }
+
     public async Task<GetListsOutput?> GetLists(
         ATIdentifier identifier,
+        string? cursor = null,
         CancellationToken cancellationToken = default
     )
     {
         var r = await proto
-            .Graph.GetListsAsync(identifier, cancellationToken: cancellationToken)
+            .Graph.GetListsAsync(identifier, cursor: cursor, cancellationToken: cancellationToken)
             .Record(metrics, "app.bsky.graph.getLists");
         return r.HandleResult();
+    }
+
+    public IAsyncEnumerable<ListView> GetListsEnumerable(
+        ATIdentifier identifier,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return BskyExtensions.GetAllResultsCursorEnumerable(
+            (cursor, ct) => GetLists(identifier, cursor, ct),
+            d => d?.Lists,
+            d => d?.Cursor,
+            DefaultDelayMs,
+            cancellationToken
+        );
     }
 
     public async Task<ResolveHandleOutput?> ResolveHandle(

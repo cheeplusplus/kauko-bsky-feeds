@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using FishyFlip.Lexicon.App.Bsky.Actor;
 using FishyFlip.Lexicon.App.Bsky.Feed;
 using FishyFlip.Models;
@@ -6,50 +7,10 @@ using Microsoft.Extensions.Logging;
 
 namespace KaukoBskyFeeds.Shared.Bsky;
 
-public interface IBskyCache
-{
-    Task<PostView?> GetPost(ATUri postUri, CancellationToken cancellationToken = default);
-
-    Task<IEnumerable<PostView?>> GetPosts(
-        IEnumerable<ATUri> postUris,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<IEnumerable<ATDid>> GetFollowing(
-        ATDid user,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<IEnumerable<ATDid>> GetFollowers(
-        ATDid user,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<IEnumerable<ATDid>> GetMutuals(ATDid user, CancellationToken cancellationToken = default);
-
-    Task<IEnumerable<ATDid>> GetListMembers(
-        ATUri listUri,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<ProfileViewDetailed?> GetProfile(
-        ATDid user,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<Dictionary<ATDid, ProfileViewDetailed?>> GetProfiles(
-        IEnumerable<ATDid> users,
-        CancellationToken cancellationToken = default
-    );
-
-    Task<IEnumerable<ATUri>> GetLikes(ATDid user, CancellationToken cancellationToken = default);
-
-    Task<IEnumerable<ATUri>> GetLists(ATDid user, CancellationToken cancellationToken = default);
-}
-
 public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cache) : IBskyCache
 {
     public static readonly TimeSpan NormalCacheDuration = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan BackgroundCacheDuration = TimeSpan.FromMinutes(30);
 
     public static readonly HybridCacheEntryOptions DefaultOpts = new()
     {
@@ -61,74 +22,26 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         Expiration = TimeSpan.FromSeconds(10),
     };
 
-    public async Task<PostView?> GetPost(
-        ATUri postUri,
-        CancellationToken cancellationToken = default
-    )
-    {
-        api.AssertLogin();
-
-        return await cache.GetOrCreateAsync(
-            $"post:{postUri.AsSafeKey()}",
-            async (ct) =>
-            {
-                logger.LogDebug("Fetching post {postUri} following", postUri);
-                var d = await api.GetPosts([postUri], ct);
-                return d?.Posts.FirstOrDefault();
-            },
-            DefaultOpts,
-            tags: ["post", $"post/{postUri}", $"user/{postUri.Did}"],
-            cancellationToken: cancellationToken
-        );
-    }
-
-    private record GetPostsDict(ATUri AtUri, PostView? Post);
-
     public async Task<IEnumerable<PostView?>> GetPosts(
         IEnumerable<ATUri> postUris,
         CancellationToken cancellationToken = default
     )
     {
-        api.AssertLogin();
-
-        var postUriList = postUris.ToList();
-
-        // fetch all available cached entries first
-        var allPosts = new Dictionary<ATUri, GetPostsDict>();
-        foreach (var uri in postUriList)
-        {
-            allPosts[uri] = new GetPostsDict(
-                uri,
-                await cache.GetAsync<PostView>($"post:{uri.AsSafeKey()}", cancellationToken)
-            );
-        }
-
-        // fetch remaining posts and cache them
-        var postsToFetch = allPosts
-            .Where(w => w.Value.Post == null)
-            .Select(s => s.Value.AtUri)
-            .ToList();
-        if (postsToFetch.Count > 0)
-        {
-            var postChunks = postsToFetch.Chunk(25); // max profiles for GetPostsAsync
-            foreach (var postGroup in postChunks)
+        var postUrisList = postUris.ToList();
+        var posts = await MultipartCache(
+            postUrisList,
+            async (uris, ct) =>
             {
-                var freshPosts = await api.GetPosts(postGroup.ToList(), cancellationToken);
-                foreach (var post in freshPosts?.Posts ?? [])
-                {
-                    allPosts[post.Uri] = new GetPostsDict(post.Uri, post);
-                    await cache.SetAsync(
-                        $"post_{post.Uri}",
-                        post,
-                        DefaultOpts,
-                        tags: ["post", $"{post.Uri}"],
-                        cancellationToken: cancellationToken
-                    );
-                }
-            }
-        }
+                var freshPosts = await api.GetPosts(uris.ToList(), ct);
+                return freshPosts?.Posts.ToDictionary(k => k.Uri, v => v);
+            },
+            25,
+            k => $"post_{k.AsSafeKey()}",
+            k => ["post", $"{k}"],
+            cancellationToken
+        );
 
-        return postUriList.Select(s => allPosts[s].Post);
+        return postUrisList.Select(s => posts[s]);
     }
 
     public async Task<IEnumerable<ATDid>> GetFollowing(
@@ -136,25 +49,15 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         CancellationToken cancellationToken = default
     )
     {
-        var self = api.AssertLogin();
-
-        return await cache.GetOrCreateAsync(
+        return await BackgroundCache(
             $"user:{user.AsSafeKey()}:following",
-            async (ct) =>
+            async ct =>
             {
                 logger.LogDebug("Fetching user {listUri} following", user);
-                return await BskyExtensions.GetAllResults(
-                    async (cursor, ict) =>
-                    {
-                        var d = await api.GetFollows(self, cursor, ict);
-                        return (d?.Follows.Select(s => s.Did), d?.Cursor);
-                    },
-                    ct
-                );
+                return await api.GetFollowsEnumerable(user, ct).ToListAsync(s => s.Did);
             },
-            DefaultOpts,
-            tags: ["user", $"user/{user}", $"user/{user}/following"],
-            cancellationToken: cancellationToken
+            ["user", $"user/{user}", $"user/{user}/following"],
+            cancellationToken
         );
     }
 
@@ -163,27 +66,15 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         CancellationToken cancellationToken = default
     )
     {
-        var self = api.AssertLogin();
-
-        return await cache.GetOrCreateAsync(
+        return await BackgroundCache(
             $"user:{user.AsSafeKey()}:followers",
-            async (ct) =>
+            async ct =>
             {
                 logger.LogDebug("Fetching user {listUri} followers", user);
-                return (
-                    await BskyExtensions.GetAllResults(
-                        async (cursor, ict) =>
-                        {
-                            var d = await api.GetFollowers(self, cursor, ict);
-                            return (d?.Followers.Select(s => s.Did), d?.Cursor);
-                        },
-                        ct
-                    )
-                );
+                return await api.GetFollowersEnumerable(user, ct).ToListAsync(s => s.Did);
             },
-            DefaultOpts,
-            tags: ["user", $"user/{user}", $"user/{user}/followers"],
-            cancellationToken: cancellationToken
+            ["user", $"user/{user}", $"user/{user}/followers"],
+            cancellationToken
         );
     }
 
@@ -192,16 +83,15 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         CancellationToken cancellationToken = default
     )
     {
-        var followingList = await GetFollowing(user, cancellationToken);
-        var followersList = await GetFollowers(user, cancellationToken);
+        // Fetch both lists in parallel
+        var allLists = await Task.WhenAll(
+            GetFollowing(user, cancellationToken),
+            GetFollowers(user, cancellationToken)
+        );
+        var followingList = allLists[0].Select(s => s.Handler);
+        var followersList = allLists[1].Select(s => s.Handler);
 
-        return followingList
-            .Select(s => s.Handler)
-            .Intersect(followersList.Select(s => s.Handler))
-            .Select(ATDid.Create)
-            .Where(w => w != null)
-            .Cast<ATDid>()
-            .ToList();
+        return followingList.Intersect(followersList).Select(ATDid.Create).WhereNotNull().ToList();
     }
 
     public async Task<IEnumerable<ATDid>> GetListMembers(
@@ -209,100 +99,35 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         CancellationToken cancellationToken = default
     )
     {
-        api.AssertLogin();
-
-        return await cache.GetOrCreateAsync(
+        return await BackgroundCache(
             $"list:{listUri.AsSafeKey()}:members",
             async (ct) =>
             {
                 logger.LogDebug("Fetching list {listUri} members list", listUri);
-                return await BskyExtensions.GetAllResults(
-                    async (cursor, ict) =>
-                    {
-                        var d = await api.GetList(listUri, cursor, ict);
-                        return (d?.Items.Select(s => s.Subject.Did), d?.Cursor);
-                    },
-                    ct
-                );
+                return await api.GetListEnumerable(listUri, ct).ToListAsync(s => s.Subject.Did);
             },
-            DefaultOpts,
-            tags: ["list", $"list/{listUri}", $"user/{listUri.Did}"],
-            cancellationToken: cancellationToken
+            ["list", $"list/{listUri}", $"user/{listUri.Did}"],
+            cancellationToken
         );
     }
-
-    public async Task<ProfileViewDetailed?> GetProfile(
-        ATDid user,
-        CancellationToken cancellationToken = default
-    )
-    {
-        api.AssertLogin();
-
-        return await cache.GetOrCreateAsync(
-            $"user:{user.AsSafeKey()}:profile",
-            async (ct) =>
-            {
-                logger.LogDebug("Fetching user {user} profile", user);
-                return await api.GetProfile(user, ct);
-            },
-            DefaultOpts,
-            tags: ["user", $"user/{user}", $"user/{user}/profile"],
-            cancellationToken: cancellationToken
-        );
-    }
-
-    private record GetProfilesDict(ATDid Did, ProfileViewDetailed? Profile);
 
     public async Task<Dictionary<ATDid, ProfileViewDetailed?>> GetProfiles(
         IEnumerable<ATDid> users,
         CancellationToken cancellationToken = default
     )
     {
-        api.AssertLogin();
-
-        // fetch all available cached entries first
-        var allProfiles = new Dictionary<ATDid, GetProfilesDict>();
-        foreach (var user in users)
-        {
-            allProfiles[user] = new GetProfilesDict(
-                user,
-                await cache.GetAsync<ProfileViewDetailed>(
-                    $"user:{user.AsSafeKey()}:profile",
-                    cancellationToken
-                )
-            );
-        }
-
-        // fetch remaining profiles and cache them
-        var profilesToFetch = allProfiles
-            .Where(w => w.Value.Profile == null)
-            .Select(s => s.Value.Did)
-            .ToList();
-        if (profilesToFetch.Count > 0)
-        {
-            var profileChunks = profilesToFetch.Chunk(25); // max profiles for GetProfilesAsync
-            foreach (var profileGroup in profileChunks)
+        return await MultipartCache(
+            users,
+            async (dids, ct) =>
             {
-                var freshProfiles = await api.GetProfiles(
-                    profileGroup.Cast<ATIdentifier>().ToList(),
-                    cancellationToken
-                );
-
-                foreach (var profile in freshProfiles?.Profiles ?? [])
-                {
-                    allProfiles[profile.Did] = new GetProfilesDict(profile.Did, profile);
-                    await cache.SetAsync(
-                        $"user_{profile.Did}_profile",
-                        profile,
-                        DefaultOpts,
-                        tags: ["user", $"user/{profile.Did}", $"user/{profile.Did}/profile"],
-                        cancellationToken: cancellationToken
-                    );
-                }
-            }
-        }
-
-        return allProfiles.ToDictionary(k => k.Value.Did, v => v.Value.Profile);
+                var freshProfiles = await api.GetProfiles(dids.Cast<ATIdentifier>().ToList(), ct);
+                return freshProfiles?.Profiles.ToDictionary(d => d.Did, d => d);
+            },
+            25,
+            k => $"user_{k.AsSafeKey()}_profile",
+            k => ["user", $"user/{k}", $"user/{k}/profile"],
+            cancellationToken
+        );
     }
 
     // This only gets recent likes
@@ -311,23 +136,19 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         CancellationToken cancellationToken = default
     )
     {
-        api.AssertLogin();
-
-        return await cache.GetOrCreateAsync(
-                $"user:{user.AsSafeKey()}:likes",
-                async (ct) =>
-                {
-                    logger.LogDebug("Fetching user {user} likes", user);
-                    var d = await api.RepoListRecords(user, BskyConstants.CollectionTypeLike, ct);
-                    return d
-                        ?.Records.Select(s => s.Value as Like)
+        return await BackgroundCache(
+            $"user:{user.AsSafeKey()}:likes",
+            async ct =>
+            {
+                logger.LogDebug("Fetching user {user} likes", user);
+                var d = await api.RepoListRecords(user, BskyConstants.CollectionTypeLike, ct);
+                return d?.Records.Select(s => s.Value as Like)
                         .Select(s => s?.Subject?.Uri)
-                        .WhereNotNull();
-                },
-                DefaultOpts,
-                tags: ["user", $"user/{user}", $"user/{user}/likes"],
-                cancellationToken: cancellationToken
-            ) ?? [];
+                        .WhereNotNull() ?? [];
+            },
+            ["user", $"user/{user}", $"user/{user}/likes"],
+            cancellationToken
+        );
     }
 
     public async Task<IEnumerable<ATUri>> GetLists(
@@ -335,25 +156,158 @@ public class BskyCache(ILogger<BskyCache> logger, IBskyApi api, HybridCache cach
         CancellationToken cancellationToken = default
     )
     {
+        return await BackgroundCache(
+            $"user:{user.AsSafeKey()}:lists",
+            async ct =>
+            {
+                logger.LogDebug("Fetching user {user} lists", user);
+                return await api.GetListsEnumerable(user, ct).ToListAsync(s => s.Uri);
+            },
+            ["user", $"user/{user}", $"user/{user}/lists"],
+            cancellationToken
+        );
+    }
+
+    // Cache that supports individual item caching with incomplete/partial fetches
+    // Note: this doesn't support background caching, so be careful in a hot path
+    // This also doesn't have stampede protection
+    private async Task<Dictionary<TIn, TOut?>> MultipartCache<TOut, TIn>(
+        IEnumerable<TIn> inputs,
+        Func<IEnumerable<TIn>, CancellationToken, ValueTask<Dictionary<TIn, TOut>?>> factory,
+        int fetchChunkSize,
+        Func<TIn, string> keyFactory,
+        Func<TIn, IEnumerable<string>> tagFactory,
+        CancellationToken cancellationToken
+    )
+        where TIn : notnull
+        where TOut : class
+    {
         api.AssertLogin();
 
-        return await cache.GetOrCreateAsync(
-                $"user:{user.AsSafeKey()}:lists",
-                async (ct) =>
+        var inputsList = inputs.ToList();
+
+        // fetch all available cached entries first
+        var allValues = new Dictionary<TIn, TOut?>();
+        foreach (var inputValue in inputsList)
+        {
+            allValues[inputValue] = await cache.GetAsync<TOut>(
+                $"bsc:{keyFactory(inputValue)}",
+                cancellationToken
+            );
+        }
+
+        // fetch remaining values and cache them
+        var valuesToFetch = allValues.Where(w => w.Value == null).Select(s => s.Key).ToList();
+        if (valuesToFetch.Count > 0)
+        {
+            var fetchChunks = valuesToFetch.Chunk(fetchChunkSize);
+            foreach (var fetchChunkGroup in fetchChunks)
+            {
+                var freshValues = await factory(fetchChunkGroup, cancellationToken);
+                foreach (var freshValue in freshValues ?? [])
                 {
-                    logger.LogDebug("Fetching user {user} lists", user);
-                    var d = await api.GetLists(user, ct);
-                    return d?.Lists.Select(s => s.Uri);
-                },
-                DefaultOpts,
-                tags: ["user", $"user/{user}", $"user/{user}/lists"],
-                cancellationToken: cancellationToken
-            ) ?? [];
+                    if (freshValue.Value == null)
+                    {
+                        continue;
+                    }
+
+                    allValues[freshValue.Key] = freshValue.Value;
+                    await cache.SetAsync(
+                        $"bsc:{keyFactory(freshValue.Key)}",
+                        freshValue.Value,
+                        DefaultOpts,
+                        tagFactory(freshValue.Key),
+                        cancellationToken
+                    );
+                }
+            }
+        }
+
+        return allValues;
     }
+
+    // Best-effort at locking
+    private readonly ConcurrentDictionary<string, byte> _refetchLocks = new();
+
+    // Cache that returns first and refreshes in the background
+    private async Task<T> BackgroundCache<T>(
+        string key,
+        Func<CancellationToken, ValueTask<T>> factory,
+        IEnumerable<string> tags,
+        CancellationToken cancellationToken
+    )
+    {
+        api.AssertLogin();
+
+        var realKey = $"bsc:{key}";
+        Func<CancellationToken, ValueTask<BackgroundCacheWrap<T>>> cacheFactory = async (ict) =>
+        {
+            var fresh = await factory(ict);
+            return new BackgroundCacheWrap<T>(fresh, DateTime.UtcNow.Add(NormalCacheDuration));
+        };
+
+        var value = await cache.GetAsync<BackgroundCacheWrap<T>>(realKey, cancellationToken);
+        if (value != null)
+        {
+            // If we have a value, return it
+            // But if it's a little too old, then refetch in the background too
+            if (value.LocalExpiry < DateTime.UtcNow && _refetchLocks.TryAdd(realKey, 0))
+            {
+                _ = Task.Run(
+                    async () =>
+                    {
+                        try
+                        {
+                            // Forcibly overwrite the value since it won't have actually expired yet
+                            await cache.SetAsync(
+                                realKey,
+                                await cacheFactory(CancellationToken.None),
+                                _backgroundCacheOptions,
+                                tags,
+                                CancellationToken.None
+                            );
+                        }
+                        finally
+                        {
+                            _refetchLocks.TryRemove(realKey, out _);
+                        }
+                    },
+                    cancellationToken
+                );
+            }
+
+            return value.Value;
+        }
+
+        // Live fetch
+        var fetched = await cache.GetOrCreateAsync(
+            realKey,
+            cacheFactory,
+            _backgroundCacheOptions,
+            tags,
+            CancellationToken.None
+        );
+        return fetched.Value;
+    }
+
+    private readonly HybridCacheEntryOptions _backgroundCacheOptions = new()
+    {
+        Expiration = BackgroundCacheDuration,
+        LocalCacheExpiration = NormalCacheDuration,
+    };
+
+    private record BackgroundCacheWrap<T>(T Value, DateTime LocalExpiry);
 }
 
 public static class CacheExtensions
 {
+    private static readonly HybridCacheEntryOptions GetOnlyOptions = new()
+    {
+        Flags =
+            HybridCacheEntryFlags.DisableDistributedCacheWrite
+            | HybridCacheEntryFlags.DisableLocalCacheWrite,
+    };
+
     public static async ValueTask<T?> GetAsync<T>(
         this HybridCache cache,
         string key,
@@ -363,12 +317,7 @@ public static class CacheExtensions
         return await cache.GetOrCreateAsync(
             key,
             (_) => ValueTask.FromResult(default(T)),
-            new HybridCacheEntryOptions()
-            {
-                Flags =
-                    HybridCacheEntryFlags.DisableDistributedCacheWrite
-                    & HybridCacheEntryFlags.DisableLocalCacheWrite,
-            },
+            GetOnlyOptions,
             cancellationToken: cancellationToken
         );
     }

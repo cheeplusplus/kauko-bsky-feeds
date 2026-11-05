@@ -30,6 +30,9 @@ public class XrpcController(
         CancellationToken cancellationToken = default
     )
     {
+        // Warning: We have 5 seconds to respond
+        // See https://github.com/bluesky-social/atproto/pull/5473
+
         AddFeedTag(feed);
 
         var feedInstance = feedRegistry.GetFeedInstance(sp, feed);

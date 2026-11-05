@@ -42,7 +42,12 @@ public class ListImagesOnly(
         string? newCursor;
         if (feedConfig.FetchTimeline)
         {
-            var postTl = await api.GetListFeed(listUri, limit, cancellationToken);
+            var postTl = await api.GetListFeed(
+                listUri,
+                limit,
+                cursor,
+                cancellationToken: cancellationToken
+            );
             posts = (postTl?.Feed ?? [])
                 .Where(w => w.Reason == null)
                 .Select(s => s.ToDbPost())
